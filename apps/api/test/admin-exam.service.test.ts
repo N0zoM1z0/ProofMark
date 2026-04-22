@@ -1,5 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-import { ExamStatus, SubmissionStatus } from '@prisma/client';
+import { ExamStatus, GradeStatus, SubmissionStatus } from '@prisma/client';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { AdminExamService } from '../src/admin-exam.service.js';
 import { verifyManifestSignature } from '../src/manifest-utils.js';
@@ -51,11 +51,21 @@ type SubmissionRecord = {
   status: SubmissionStatus;
 };
 
+type GradeRecord = {
+  id: string;
+  examId: string;
+  submissionId: string;
+  status: GradeStatus;
+  finalizedAt?: Date | null;
+  auditEventId?: string | null;
+};
+
 function createPrismaMock() {
   const exams: ExamRecord[] = [];
   const versions: ExamVersionRecord[] = [];
   const auditEvents: AuditEventRecord[] = [];
   const submissions: SubmissionRecord[] = [];
+  const grades: GradeRecord[] = [];
 
   const tx = {
     auditEvent: {
@@ -168,6 +178,39 @@ function createPrismaMock() {
             item.examId === where.examId &&
             (where.status === undefined || item.status === where.status)
         ).length
+    },
+    grade: {
+      count: async ({
+        where
+      }: {
+        where: { examId: string; status?: GradeStatus };
+      }) =>
+        grades.filter(
+          (item) =>
+            item.examId === where.examId &&
+            (where.status === undefined || item.status === where.status)
+        ).length,
+      updateMany: async ({
+        where,
+        data
+      }: {
+        where: { examId: string; status?: GradeStatus };
+        data: Partial<GradeRecord>;
+      }) => {
+        let count = 0;
+
+        for (const grade of grades) {
+          if (
+            grade.examId === where.examId &&
+            (where.status === undefined || grade.status === where.status)
+          ) {
+            Object.assign(grade, data);
+            count += 1;
+          }
+        }
+
+        return { count };
+      }
     }
   };
 
@@ -177,8 +220,10 @@ function createPrismaMock() {
       $transaction: async <T>(callback: (client: typeof tx) => Promise<T>) =>
         callback(tx),
       exam: tx.exam,
+      grade: tx.grade,
       submission: tx.submission
     },
+    grades,
     submissions,
     versions
   };
@@ -336,5 +381,47 @@ describe('AdminExamService', () => {
       examId
     });
     expect(grading.exam.status).toBe(ExamStatus.GRADING);
+  });
+
+  it('finalizes verified grades and opens claiming', async () => {
+    const created = await service.createExam({
+      adminId: 'admin-1',
+      title: 'ProofMark Phase 8'
+    });
+    const examId = created.exam.id;
+
+    await prismaMock.prisma.exam.update({
+      where: {
+        id: examId
+      },
+      data: {
+        status: ExamStatus.GRADING
+      }
+    });
+
+    prismaMock.submissions.push({
+      examId,
+      id: 'submission-1',
+      status: SubmissionStatus.ACCEPTED
+    });
+    prismaMock.grades.push({
+      examId,
+      id: 'grade-1',
+      status: GradeStatus.VERIFIED,
+      submissionId: 'submission-1'
+    });
+
+    const finalized = await service.finalizeExam({
+      adminId: 'admin-1',
+      examId
+    });
+    expect(finalized.exam.status).toBe(ExamStatus.FINALIZED);
+    expect(prismaMock.grades[0]?.status).toBe(GradeStatus.FINALIZED);
+
+    const claiming = await service.openClaiming({
+      adminId: 'admin-1',
+      examId
+    });
+    expect(claiming.exam.status).toBe(ExamStatus.CLAIMING);
   });
 });

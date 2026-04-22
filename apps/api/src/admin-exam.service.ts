@@ -5,7 +5,12 @@ import {
   Injectable,
   NotFoundException
 } from '@nestjs/common';
-import { ExamStatus, Prisma, SubmissionStatus } from '@prisma/client';
+import {
+  ExamStatus,
+  GradeStatus,
+  Prisma,
+  SubmissionStatus
+} from '@prisma/client';
 import {
   normalizeFixedMcqQuestionSet,
   type FixedMcqQuestionSet
@@ -823,6 +828,116 @@ export class AdminExamService {
         examId: params.examId,
         payload: {
           acceptedSubmissionCount,
+          status: updatedExam.status
+        }
+      });
+
+      return {
+        auditEventId: auditEvent.id,
+        exam: updatedExam
+      };
+    });
+  }
+
+  async finalizeExam(params: { examId: string; adminId: string }) {
+    const exam = await this.getExamOrThrow(params.examId);
+
+    if (exam.status !== ExamStatus.GRADING) {
+      throw new ConflictException('Exam must be GRADING before finalization');
+    }
+
+    const acceptedSubmissionCount = await this.prisma.submission.count({
+      where: {
+        examId: params.examId,
+        status: SubmissionStatus.ACCEPTED
+      }
+    });
+    const verifiedGradeCount = await this.prisma.grade.count({
+      where: {
+        examId: params.examId,
+        status: GradeStatus.VERIFIED
+      }
+    });
+
+    if (acceptedSubmissionCount === 0 || verifiedGradeCount < acceptedSubmissionCount) {
+      throw new ConflictException('FINALIZED requires verified grades for all submissions');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const createdAt = new Date();
+      const updatedExam = await tx.exam.update({
+        where: {
+          id: params.examId
+        },
+        data: {
+          status: ExamStatus.FINALIZED
+        }
+      });
+      const auditEvent = await appendAuditEvent(tx, {
+        actorRef: params.adminId,
+        actorRole: 'ADMIN',
+        eventType: 'ExamFinalized',
+        examId: params.examId,
+        payload: {
+          finalizedGradeCount: verifiedGradeCount,
+          status: updatedExam.status
+        },
+        createdAt
+      });
+
+      await tx.grade.updateMany({
+        where: {
+          examId: params.examId,
+          status: GradeStatus.VERIFIED
+        },
+        data: {
+          auditEventId: auditEvent.id,
+          finalizedAt: createdAt,
+          status: GradeStatus.FINALIZED
+        }
+      });
+
+      return {
+        auditEventId: auditEvent.id,
+        exam: updatedExam
+      };
+    });
+  }
+
+  async openClaiming(params: { examId: string; adminId: string }) {
+    const exam = await this.getExamOrThrow(params.examId);
+
+    if (exam.status !== ExamStatus.FINALIZED) {
+      throw new ConflictException('Exam must be FINALIZED before CLAIMING opens');
+    }
+
+    const finalizedGradeCount = await this.prisma.grade.count({
+      where: {
+        examId: params.examId,
+        status: GradeStatus.FINALIZED
+      }
+    });
+
+    if (finalizedGradeCount === 0) {
+      throw new ConflictException('CLAIMING requires finalized grades');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedExam = await tx.exam.update({
+        where: {
+          id: params.examId
+        },
+        data: {
+          status: ExamStatus.CLAIMING
+        }
+      });
+      const auditEvent = await appendAuditEvent(tx, {
+        actorRef: params.adminId,
+        actorRole: 'ADMIN',
+        eventType: 'ExamClaimingOpened',
+        examId: params.examId,
+        payload: {
+          finalizedGradeCount,
           status: updatedExam.status
         }
       });

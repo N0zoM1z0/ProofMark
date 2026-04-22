@@ -1,5 +1,10 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { EligibleCommitmentStatus } from '@prisma/client';
+import {
+  EligibleCommitmentStatus,
+  ExamStatus,
+  GradeStatus,
+  ProofVerificationStatus
+} from '@prisma/client';
 import { PrismaService } from './prisma.service.js';
 import { getBlobEncryptionPublicKeyPem } from './blob-encryption.js';
 import {
@@ -177,6 +182,81 @@ export class PublicExamService {
       ),
       size: exam.eligibleCommitments.length,
       status: exam.status
+    };
+  }
+
+  async getFinalizedGrade(examId: string, submissionId: string) {
+    const submission = await this.prisma.submission.findUnique({
+      where: {
+        id: submissionId
+      },
+      include: {
+        exam: {
+          select: {
+            id: true,
+            status: true
+          }
+        },
+        grades: {
+          where: {
+            status: GradeStatus.FINALIZED
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 1
+        },
+        proofArtifacts: {
+          where: {
+            type: 'objective-grade-proof',
+            verificationStatus: ProofVerificationStatus.VERIFIED
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 1
+        }
+      }
+    });
+
+    if (!submission || submission.examId !== examId) {
+      throw new NotFoundException('Submission not found');
+    }
+
+    if (
+      submission.exam.status !== ExamStatus.FINALIZED &&
+      submission.exam.status !== ExamStatus.CLAIMING
+    ) {
+      throw new ConflictException('Finalized grades are not published yet');
+    }
+
+    const grade = submission.grades[0];
+
+    if (!grade) {
+      throw new NotFoundException('Finalized grade not found');
+    }
+
+    return {
+      examStatus: submission.exam.status,
+      grade: {
+        finalScore: grade.finalScore,
+        finalizedAt: grade.finalizedAt,
+        gradeCommitment: grade.gradeCommitment,
+        gradeId: grade.id,
+        maxScore: grade.maxScore,
+        objectiveScore: grade.objectiveScore
+      },
+      proofArtifact: submission.proofArtifacts[0]
+        ? {
+            circuitName: submission.proofArtifacts[0].circuitName,
+            circuitVersion: submission.proofArtifacts[0].circuitVersion,
+            proofHash: submission.proofArtifacts[0].proofHash,
+            publicInputsHash: submission.proofArtifacts[0].publicInputsHash,
+            verificationStatus: submission.proofArtifacts[0].verificationStatus,
+            vkHash: submission.proofArtifacts[0].vkHash
+          }
+        : null,
+      submissionId: submission.id
     };
   }
 }

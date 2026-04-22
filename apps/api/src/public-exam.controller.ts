@@ -51,6 +51,14 @@ export class PublicExamController {
     return this.publicExamService.getPublicGroupSnapshot(examId);
   }
 
+  @Get(':examId/submissions/:submissionId/finalized-grade')
+  async getFinalizedGrade(
+    @Param('examId') examId: string,
+    @Param('submissionId') submissionId: string
+  ) {
+    return this.publicExamService.getFinalizedGrade(examId, submissionId);
+  }
+
   @Post(':examId/submissions/presign-upload')
   async createPresignedSubmissionUpload(
     @Param('examId') examId: string,

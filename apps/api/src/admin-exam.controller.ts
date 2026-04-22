@@ -204,4 +204,26 @@ export class AdminExamController {
       examId
     });
   }
+
+  @Post(':examId/finalize')
+  async finalizeExam(
+    @Param('examId') examId: string,
+    @Headers('x-admin-id') adminId: string | undefined
+  ) {
+    return this.adminExamService.finalizeExam({
+      adminId: requireAdminId(adminId),
+      examId
+    });
+  }
+
+  @Post(':examId/claiming')
+  async openClaiming(
+    @Param('examId') examId: string,
+    @Headers('x-admin-id') adminId: string | undefined
+  ) {
+    return this.adminExamService.openClaiming({
+      adminId: requireAdminId(adminId),
+      examId
+    });
+  }
 }
