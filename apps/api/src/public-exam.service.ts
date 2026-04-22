@@ -1,5 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { EligibleCommitmentStatus } from '@prisma/client';
 import { PrismaService } from './prisma.service.js';
+import { getBlobEncryptionPublicKeyPem } from './blob-encryption.js';
 import {
   buildPublicExamManifest,
   getManifestPublicKeyPem,
@@ -21,19 +23,20 @@ export class PublicExamService {
         endsAt: true,
         id: true,
         questionSetHash: true,
-        startsAt: true,
-        status: true,
-        title: true,
         versions: {
           select: {
             manifestHash: true,
+            questionSetData: true,
             version: true
           },
           orderBy: {
             version: 'desc'
           },
           take: 1
-        }
+        },
+        startsAt: true,
+        status: true,
+        title: true,
       }
     });
 
@@ -46,9 +49,11 @@ export class PublicExamService {
     return {
       currentGroupRoot: exam.currentGroupRoot,
       endsAt: exam.endsAt,
+      encryptionPublicKey: getBlobEncryptionPublicKeyPem(),
       examVersion: latestVersion?.version ?? 1,
       id: exam.id,
       manifestHash: latestVersion?.manifestHash ?? null,
+      questionSet: latestVersion?.questionSetData ?? null,
       questionSetHash: exam.questionSetHash,
       startsAt: exam.startsAt,
       status: exam.status,
@@ -118,6 +123,59 @@ export class PublicExamService {
       manifestHash,
       serverPublicKey: getManifestPublicKeyPem(),
       serverSignature: signManifestPayload(manifest),
+      status: exam.status
+    };
+  }
+
+  async getPublicGroupSnapshot(examId: string) {
+    const exam = await this.prisma.exam.findUnique({
+      where: {
+        id: examId
+      },
+      select: {
+        currentGroupRoot: true,
+        id: true,
+        status: true,
+        eligibleCommitments: {
+          where: {
+            status: EligibleCommitmentStatus.ACTIVE
+          },
+          orderBy: [
+            {
+              addedAt: 'asc'
+            },
+            {
+              id: 'asc'
+            }
+          ],
+          select: {
+            identityCommitment: true
+          }
+        },
+        versions: {
+          orderBy: {
+            version: 'desc'
+          },
+          select: {
+            version: true
+          },
+          take: 1
+        }
+      }
+    });
+
+    if (!exam) {
+      throw new NotFoundException('Exam not found');
+    }
+
+    return {
+      examId: exam.id,
+      examVersion: exam.versions[0]?.version ?? 1,
+      groupRoot: exam.currentGroupRoot,
+      memberCommitments: exam.eligibleCommitments.map(
+        (commitment) => commitment.identityCommitment
+      ),
+      size: exam.eligibleCommitments.length,
       status: exam.status
     };
   }

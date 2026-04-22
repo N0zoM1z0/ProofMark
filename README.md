@@ -74,6 +74,22 @@ Copy `.env.example` to `.env` and adjust values if needed. The default local sta
 The repository currently includes:
 
 - Phase 0 foundation scaffolding
+- Phase 1 core exam domain schema and lifecycle guards
+- Phase 2 canonical hashing, audit chaining, Merkle proofs, and signed receipts
+- Phase 3 local Semaphore identity wallet and commitment registration
+- Phase 4 anonymous submission verification and receipt issuance
+- Phase 5 admin authoring plus signed public manifests
+- Phase 6 student MCQ exam-taking flow with encrypted blob upload, Web Worker proof generation, encrypted local draft recovery, and browser-side receipt verification
 - an execution-ready implementation plan in [`docs/implementation-plan.md`](docs/implementation-plan.md)
 
-Subsequent phases will add the core Prisma model, audit log primitives, anonymous submission flow, and grading proof pipeline.
+## Phase 6 Routes
+
+- `/student/register` for local Semaphore wallet creation, backup export, import, and roster commitment registration
+- `/student/exam` for loading the public exam, restoring encrypted drafts, encrypting answer blobs, generating the proof in a worker, and submitting anonymously
+- `/verify-receipt` for browser-side receipt verification without privileged API access
+
+## Additional Environment Notes
+
+- `PUBLIC_API_BASE_URL` is used by the submission upload flow to mint absolute upload URLs
+- `BLOB_ENCRYPTION_PRIVATE_KEY` controls the RSA key used for client-side answer blob encryption; `dev-static-proofmark-key` is only for local development
+- `UPLOAD_TOKEN_SECRET` signs one-time upload tokens for encrypted submission blobs

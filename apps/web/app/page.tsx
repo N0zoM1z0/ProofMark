@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 const highlights = [
   'Anonymous submission with Semaphore-based eligibility proofs',
   'Tamper-evident audit roots and signed receipts',
@@ -23,6 +25,27 @@ export default function HomePage() {
             <li key={item}>{item}</li>
           ))}
         </ul>
+      </section>
+
+      <section className="card">
+        <h2>Live Flows</h2>
+        <div className="link-grid">
+          <Link href="/student/register" className="nav-tile">
+            <span className="eyebrow">Phase 3</span>
+            <strong>Register Identity</strong>
+            <p>Create and encrypt the local Semaphore wallet.</p>
+          </Link>
+          <Link href="/student/exam" className="nav-tile">
+            <span className="eyebrow">Phase 6</span>
+            <strong>Take Exam</strong>
+            <p>Answer MCQs, upload encrypted blobs, and submit anonymously.</p>
+          </Link>
+          <Link href="/verify-receipt" className="nav-tile">
+            <span className="eyebrow">Audit</span>
+            <strong>Verify Receipt</strong>
+            <p>Validate signatures and Merkle inclusion entirely in-browser.</p>
+          </Link>
+        </div>
       </section>
     </main>
   );

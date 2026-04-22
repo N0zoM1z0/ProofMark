@@ -58,8 +58,12 @@ model Exam {
   status               ExamStatus            @default(DRAFT)
   startsAt             DateTime?
   endsAt               DateTime?
+  questionSetData      Json?
   questionSetHash      String?
+  answerKeyData        Json?
+  answerKeySalt        String?
   answerKeyCommitment  String?
+  gradingPolicyData    Json?
   gradingPolicyHash    String?
   currentGroupRoot     String?
   createdByRef         String
@@ -80,7 +84,11 @@ model ExamVersion {
   id              String   @id @default(uuid())
   examId          String
   version         Int
+  questionSetData Json?
   questionSetHash String
+  answerKeyData   Json?
+  answerKeySalt   String?
+  gradingPolicyData Json?
   policyHash      String
   manifestHash    String?
   createdAt       DateTime @default(now())

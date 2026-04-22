@@ -3,10 +3,12 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
+    "prebuild": "corepack pnpm --filter @proofmark/shared build && corepack pnpm --filter @proofmark/zk-semaphore build",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "pretest": "corepack pnpm --filter @proofmark/shared build && corepack pnpm --filter @proofmark/zk-semaphore build",
     "test": "vitest run --passWithNoTests"
   },
   "devDependencies": {
@@ -14,6 +16,9 @@
     "@types/react-dom": "^19.2.3"
   },
   "dependencies": {
+    "@proofmark/shared": "workspace:*",
+    "@proofmark/zk-semaphore": "workspace:*",
+    "@semaphore-protocol/group": "^4.14.2",
     "@semaphore-protocol/identity": "^4.14.2",
     "idb-keyval": "^6.2.2",
     "next": "^16.2.4",

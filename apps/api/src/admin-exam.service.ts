@@ -5,7 +5,11 @@ import {
   Injectable,
   NotFoundException
 } from '@nestjs/common';
-import { ExamStatus } from '@prisma/client';
+import { ExamStatus, Prisma } from '@prisma/client';
+import {
+  normalizeFixedMcqQuestionSet,
+  type FixedMcqQuestionSet
+} from '@proofmark/shared';
 import { PrismaService } from './prisma.service.js';
 import {
   buildPublicExamManifest,
@@ -24,8 +28,12 @@ type ExamSummary = {
   status: ExamStatus;
   startsAt: Date | null;
   endsAt: Date | null;
+  questionSetData: unknown;
   questionSetHash: string | null;
+  answerKeyData: unknown;
+  answerKeySalt: string | null;
   answerKeyCommitment: string | null;
+  gradingPolicyData: unknown;
   gradingPolicyHash: string | null;
   currentGroupRoot: string | null;
 };
@@ -153,6 +161,74 @@ function actorPseudonym(actorRef: string) {
   return sha256Hex(`admin:${actorRef}`).slice(0, 16);
 }
 
+function normalizeFixedMcqAnswerKey(
+  questionSet: FixedMcqQuestionSet,
+  answerKey: unknown
+) {
+  const source =
+    Object.prototype.toString.call(answerKey) === '[object Object]'
+      ? (answerKey as Record<string, unknown>)
+      : null;
+
+  if (!source) {
+    throw new BadRequestException('answerKey must be an object keyed by question id');
+  }
+
+  return {
+    answers: questionSet.questions.map((question) => {
+      const correctChoiceId = source[question.id];
+
+      if (typeof correctChoiceId !== 'string' || !correctChoiceId.trim()) {
+        throw new BadRequestException(
+          `answerKey must include a choice id for question ${question.id}`
+        );
+      }
+
+      if (!question.choices.some((choice) => choice.id === correctChoiceId)) {
+        throw new BadRequestException(
+          `answerKey.${question.id} must match a published choice id`
+        );
+      }
+
+      return {
+        correctChoiceId,
+        questionId: question.id
+      };
+    }),
+    version: 'proofmark-fixed-mcq-answer-key-v1' as const
+  };
+}
+
+function normalizeGradingPolicy(
+  questionSet: FixedMcqQuestionSet,
+  gradingPolicy: unknown
+) {
+  const source =
+    Object.prototype.toString.call(gradingPolicy) === '[object Object]'
+      ? (gradingPolicy as Record<string, unknown>)
+      : {};
+  const pointsPerQuestion =
+    typeof source.pointsPerQuestion === 'number' && Number.isFinite(source.pointsPerQuestion)
+      ? source.pointsPerQuestion
+      : 1;
+
+  if (pointsPerQuestion <= 0) {
+    throw new BadRequestException('gradingPolicy.pointsPerQuestion must be positive');
+  }
+
+  return {
+    allowPartialCredit: false,
+    maxScore: questionSet.questions.length * pointsPerQuestion,
+    pointsPerQuestion,
+    questionCount: questionSet.questions.length,
+    version: 'proofmark-fixed-mcq-policy-v1' as const
+  };
+}
+
+function asJsonValue(value: unknown) {
+  return value as Prisma.InputJsonValue;
+}
+
 async function appendAuditEvent(
   tx: TransactionClient,
   params: {
@@ -222,8 +298,12 @@ export class AdminExamService {
         courseId: true,
         currentGroupRoot: true,
         endsAt: true,
+        answerKeyData: true,
+        answerKeySalt: true,
         gradingPolicyHash: true,
+        gradingPolicyData: true,
         id: true,
+        questionSetData: true,
         questionSetHash: true,
         startsAt: true,
         status: true,
@@ -344,7 +424,8 @@ export class AdminExamService {
 
     validateDraftMutation(exam, 'questionSet');
 
-    const questionSetHash = hashQuestionSet(params.questionSet);
+    const normalizedQuestionSet = normalizeFixedMcqQuestionSet(params.questionSet);
+    const questionSetHash = hashQuestionSet(normalizedQuestionSet);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.exam.update({
@@ -352,6 +433,7 @@ export class AdminExamService {
           id: params.examId
         },
         data: {
+          questionSetData: asJsonValue(normalizedQuestionSet),
           questionSetHash
         }
       });
@@ -361,6 +443,7 @@ export class AdminExamService {
         eventType: 'QuestionSetHashed',
         examId: params.examId,
         payload: {
+          questionCount: normalizedQuestionSet.questions.length,
           questionSetHash
         }
       });
@@ -387,8 +470,17 @@ export class AdminExamService {
       throw new BadRequestException('salt is required');
     }
 
+    if (!exam.questionSetData) {
+      throw new ConflictException('questionSet must be configured before answerKey');
+    }
+
+    const normalizedQuestionSet = normalizeFixedMcqQuestionSet(exam.questionSetData);
+    const normalizedAnswerKey = normalizeFixedMcqAnswerKey(
+      normalizedQuestionSet,
+      params.answerKey
+    );
     const answerKeyCommitment = commitAnswerKey({
-      answerKey: params.answerKey,
+      answerKey: normalizedAnswerKey,
       salt: params.salt
     });
 
@@ -398,6 +490,8 @@ export class AdminExamService {
           id: params.examId
         },
         data: {
+          answerKeyData: asJsonValue(normalizedAnswerKey),
+          answerKeySalt: params.salt,
           answerKeyCommitment
         }
       });
@@ -427,8 +521,16 @@ export class AdminExamService {
     const exam = await this.getExamOrThrow(params.examId);
 
     validateDraftMutation(exam, 'gradingPolicy');
+    if (!exam.questionSetData) {
+      throw new ConflictException('questionSet must be configured before gradingPolicy');
+    }
 
-    const gradingPolicyHash = hashGradingPolicy(params.gradingPolicy);
+    const normalizedQuestionSet = normalizeFixedMcqQuestionSet(exam.questionSetData);
+    const normalizedGradingPolicy = normalizeGradingPolicy(
+      normalizedQuestionSet,
+      params.gradingPolicy
+    );
+    const gradingPolicyHash = hashGradingPolicy(normalizedGradingPolicy);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.exam.update({
@@ -436,6 +538,7 @@ export class AdminExamService {
           id: params.examId
         },
         data: {
+          gradingPolicyData: asJsonValue(normalizedGradingPolicy),
           gradingPolicyHash
         }
       });
@@ -461,6 +564,9 @@ export class AdminExamService {
     const exam = await this.getExamOrThrow(params.examId);
 
     assertTransition(exam, ExamStatus.COMMITTED);
+    if (!exam.questionSetData || !exam.answerKeyData || !exam.gradingPolicyData) {
+      throw new ConflictException('Committed exam must include internal content snapshots');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       const latestVersion = await tx.examVersion.findFirst({
@@ -486,9 +592,13 @@ export class AdminExamService {
       });
       const version = await tx.examVersion.create({
         data: {
+          answerKeyData: asJsonValue(exam.answerKeyData),
+          answerKeySalt: exam.answerKeySalt,
           auditEventId: auditEvent.id,
           examId: params.examId,
+          gradingPolicyData: asJsonValue(exam.gradingPolicyData),
           policyHash: exam.gradingPolicyHash!,
+          questionSetData: asJsonValue(exam.questionSetData),
           questionSetHash: exam.questionSetHash!,
           version: nextVersion
         }

@@ -1,11 +1,13 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException
 } from '@nestjs/common';
 import { ExamStatus, SubmissionStatus } from '@prisma/client';
 import { verifyProof } from '@semaphore-protocol/proof';
+import { BlobStorageService } from './blob-storage.service.js';
 import { PrismaService } from './prisma.service.js';
 import {
   calculateMerkleRoot,
@@ -49,7 +51,11 @@ const semaphoreVerifyProof = verifyProof as (
 
 @Injectable()
 export class SubmissionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(BlobStorageService)
+    private readonly blobStorage: BlobStorageService
+  ) {}
 
   async createSubmission(input: SubmissionInput) {
     const exam = await this.prisma.exam.findUnique({
@@ -121,6 +127,11 @@ export class SubmissionService {
     if (!proofIsValid) {
       throw new BadRequestException('PROOF_INVALID');
     }
+
+    await this.blobStorage.assertBlobExists({
+      blobUri: input.encryptedBlobUri,
+      encryptedBlobHash: input.encryptedBlobHash
+    });
 
     return this.prisma.$transaction(async (tx) => {
       const duplicateSubmission = await tx.submission.findUnique({

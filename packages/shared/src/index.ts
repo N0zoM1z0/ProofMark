@@ -5,3 +5,4 @@ export function createVersionBanner(version: string) {
 }
 
 export * from './exam-status.js';
+export * from './fixed-mcq.js';

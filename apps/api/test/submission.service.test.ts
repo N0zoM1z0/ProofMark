@@ -142,8 +142,12 @@ function createProof(params: {
 
 describe('SubmissionService', () => {
   let exam: ExamRecord;
+  const blobStorage = {
+    assertBlobExists: vi.fn(async () => undefined)
+  };
 
   beforeEach(() => {
+    blobStorage.assertBlobExists.mockClear();
     exam = {
       currentGroupRoot: '999',
       id: 'exam-1',
@@ -155,7 +159,7 @@ describe('SubmissionService', () => {
 
   it('accepts a valid anonymous submission and returns a signed receipt', async () => {
     const { prisma, submissions } = createPrismaMock(exam);
-    const service = new SubmissionService(prisma as never);
+    const service = new SubmissionService(prisma as never, blobStorage as never);
     const message = computeSubmissionMessage({
       answerCommitment: '0xaaa',
       encryptedBlobHash: 'sha256:blob',
@@ -191,7 +195,7 @@ describe('SubmissionService', () => {
 
   it('rejects an invalid message binding', async () => {
     const { prisma } = createPrismaMock(exam);
-    const service = new SubmissionService(prisma as never);
+    const service = new SubmissionService(prisma as never, blobStorage as never);
     const scope = computeSubmitScope(exam.id, 1);
 
     await expect(
@@ -218,7 +222,7 @@ describe('SubmissionService', () => {
 
   it('rejects an unknown group root and duplicate nullifier reuse', async () => {
     const { prisma } = createPrismaMock(exam);
-    const service = new SubmissionService(prisma as never);
+    const service = new SubmissionService(prisma as never, blobStorage as never);
     const message = computeSubmissionMessage({
       answerCommitment: '0xaaa',
       encryptedBlobHash: 'sha256:blob',

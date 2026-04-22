@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { PublicExamService } from './public-exam.service.js';
 import { SubmissionService, type SemaphoreProof } from './submission.service.js';
+import { SubmissionUploadService } from './submission-upload.service.js';
 
 type SubmissionBody = {
   answerCommitment?: string;
@@ -22,11 +23,17 @@ type SubmissionBody = {
   scope?: string;
 };
 
+type PresignUploadBody = {
+  encryptedBlobHash?: string;
+  examVersion?: number;
+};
+
 @Controller('api/public/exams')
 export class PublicExamController {
   constructor(
     private readonly publicExamService: PublicExamService,
-    private readonly submissionService: SubmissionService
+    private readonly submissionService: SubmissionService,
+    private readonly submissionUploadService: SubmissionUploadService
   ) {}
 
   @Get(':examId')
@@ -37,6 +44,29 @@ export class PublicExamController {
   @Get(':examId/manifest')
   async getManifest(@Param('examId') examId: string) {
     return this.publicExamService.getPublicManifest(examId);
+  }
+
+  @Get(':examId/group')
+  async getGroupSnapshot(@Param('examId') examId: string) {
+    return this.publicExamService.getPublicGroupSnapshot(examId);
+  }
+
+  @Post(':examId/submissions/presign-upload')
+  async createPresignedSubmissionUpload(
+    @Param('examId') examId: string,
+    @Body() body: PresignUploadBody
+  ) {
+    if (!body.encryptedBlobHash || body.examVersion === undefined) {
+      throw new BadRequestException(
+        'encryptedBlobHash and examVersion are required'
+      );
+    }
+
+    return this.submissionUploadService.createUploadUrl({
+      encryptedBlobHash: body.encryptedBlobHash,
+      examId,
+      examVersion: body.examVersion
+    });
   }
 
   @Post(':examId/submissions')

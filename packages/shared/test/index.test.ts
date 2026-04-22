@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   assertExamStatusTransition,
   canTransitionExamStatus,
+  createFixedMcqAnswerSheet,
   createVersionBanner,
+  normalizeFixedMcqQuestionSet,
   packageName
 } from '../src/index.js';
 
@@ -60,5 +62,58 @@ describe('exam lifecycle transitions', () => {
         hasGradingArtifacts: false
       })
     ).toThrow('CLAIMING requires finalized grading artifacts');
+  });
+});
+
+describe('fixed MCQ helpers', () => {
+  it('normalizes the question set and encodes ordered answers', () => {
+    const questionSet = normalizeFixedMcqQuestionSet({
+      questions: [
+        {
+          choices: [
+            { id: 'a', label: 'A' },
+            { id: 'b', label: 'B' }
+          ],
+          id: 'q1',
+          prompt: 'First'
+        },
+        {
+          choices: [
+            { id: 'true', label: 'True' },
+            { id: 'false', label: 'False' }
+          ],
+          id: 'q2',
+          prompt: 'Second'
+        }
+      ],
+      title: 'Sample'
+    });
+
+    expect(
+      createFixedMcqAnswerSheet({
+        answers: {
+          q2: 'false'
+        },
+        examId: 'exam-1',
+        examVersion: 2,
+        questionSet,
+        questionSetHash: 'sha256:test'
+      })
+    ).toEqual({
+      examId: 'exam-1',
+      examVersion: 2,
+      questionSetHash: 'sha256:test',
+      responses: [
+        {
+          questionId: 'q1',
+          selectedChoiceId: null
+        },
+        {
+          questionId: 'q2',
+          selectedChoiceId: 'false'
+        }
+      ],
+      version: 'proofmark-answer-sheet-v1'
+    });
   });
 });

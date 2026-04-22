@@ -11,8 +11,12 @@ type ExamRecord = {
   status: ExamStatus;
   startsAt: Date | null;
   endsAt: Date | null;
+  questionSetData: unknown | null;
   questionSetHash: string | null;
+  answerKeyData: unknown | null;
+  answerKeySalt: string | null;
   answerKeyCommitment: string | null;
+  gradingPolicyData: unknown | null;
   gradingPolicyHash: string | null;
   currentGroupRoot: string | null;
   createdByRef: string;
@@ -22,7 +26,11 @@ type ExamVersionRecord = {
   id: string;
   examId: string;
   version: number;
+  questionSetData: unknown | null;
   questionSetHash: string;
+  answerKeyData: unknown | null;
+  answerKeySalt: string | null;
+  gradingPolicyData: unknown | null;
   policyHash: string;
   manifestHash: string | null;
   auditEventId: string | null;
@@ -62,13 +70,17 @@ function createPrismaMock() {
     exam: {
       create: async ({ data }: { data: Partial<ExamRecord> }) => {
         const exam: ExamRecord = {
+          answerKeyData: null,
+          answerKeySalt: null,
           answerKeyCommitment: null,
           courseId: null,
           createdByRef: data.createdByRef!,
           currentGroupRoot: null,
           endsAt: data.endsAt ?? null,
+          gradingPolicyData: null,
           gradingPolicyHash: null,
           id: `exam-${exams.length + 1}`,
+          questionSetData: null,
           questionSetHash: null,
           startsAt: data.startsAt ?? null,
           status: ExamStatus.DRAFT,
@@ -110,9 +122,13 @@ function createPrismaMock() {
     examVersion: {
       create: async ({ data }: { data: Omit<ExamVersionRecord, 'id' | 'createdAt'> }) => {
         const version: ExamVersionRecord = {
+          answerKeyData: null,
+          answerKeySalt: null,
           createdAt: new Date(),
+          gradingPolicyData: null,
           id: `version-${versions.length + 1}`,
           manifestHash: null,
+          questionSetData: null,
           ...data
         };
         versions.push(version);
@@ -186,7 +202,11 @@ describe('AdminExamService', () => {
       questionSet: {
         questions: [
           {
-            choices: ['A', 'B', 'C'],
+            choices: [
+              { id: 'a', label: 'A' },
+              { id: 'b', label: 'B' },
+              { id: 'c', label: 'C' }
+            ],
             id: 'q1',
             prompt: 'Pick A'
           }
@@ -197,7 +217,7 @@ describe('AdminExamService', () => {
     const answerKey = await service.setAnswerKeyCommitment({
       adminId: 'admin-1',
       answerKey: {
-        q1: 'A'
+        q1: 'a'
       },
       examId,
       salt: 'phase-5'
@@ -206,8 +226,7 @@ describe('AdminExamService', () => {
       adminId: 'admin-1',
       examId,
       gradingPolicy: {
-        allowPartialCredit: false,
-        rubric: 'mcq-v1'
+        pointsPerQuestion: 2
       }
     });
 
