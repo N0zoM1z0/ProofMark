@@ -4,12 +4,22 @@
   "type": "module",
   "version": "0.1.0",
   "scripts": {
+    "prebuild": "corepack pnpm --filter @proofmark/shared build && corepack pnpm --filter @proofmark/zk-grading-noir build",
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
+    "pretest": "corepack pnpm --filter @proofmark/shared build && corepack pnpm --filter @proofmark/zk-grading-noir build",
     "test": "vitest run"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1034.0",
+    "@prisma/adapter-pg": "^7.7.0",
+    "@prisma/client": "^7.7.0",
+    "@proofmark/crypto": "workspace:*",
+    "@proofmark/shared": "workspace:*",
+    "@proofmark/zk-grading-noir": "workspace:*",
+    "pg": "^8.20.0"
+  },
   "devDependencies": {}
 }

@@ -1,5 +1,5 @@
 import { ConflictException } from '@nestjs/common';
-import { ExamStatus } from '@prisma/client';
+import { ExamStatus, SubmissionStatus } from '@prisma/client';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { AdminExamService } from '../src/admin-exam.service.js';
 import { verifyManifestSignature } from '../src/manifest-utils.js';
@@ -45,10 +45,17 @@ type AuditEventRecord = {
   createdAt: Date;
 };
 
+type SubmissionRecord = {
+  id: string;
+  examId: string;
+  status: SubmissionStatus;
+};
+
 function createPrismaMock() {
   const exams: ExamRecord[] = [];
   const versions: ExamVersionRecord[] = [];
   const auditEvents: AuditEventRecord[] = [];
+  const submissions: SubmissionRecord[] = [];
 
   const tx = {
     auditEvent: {
@@ -149,6 +156,18 @@ function createPrismaMock() {
         Object.assign(version, data);
         return version;
       }
+    },
+    submission: {
+      count: async ({
+        where
+      }: {
+        where: { examId: string; status?: SubmissionStatus };
+      }) =>
+        submissions.filter(
+          (item) =>
+            item.examId === where.examId &&
+            (where.status === undefined || item.status === where.status)
+        ).length
     }
   };
 
@@ -157,8 +176,10 @@ function createPrismaMock() {
     prisma: {
       $transaction: async <T>(callback: (client: typeof tx) => Promise<T>) =>
         callback(tx),
-      exam: tx.exam
+      exam: tx.exam,
+      submission: tx.submission
     },
+    submissions,
     versions
   };
 }
@@ -278,5 +299,42 @@ describe('AdminExamService', () => {
     expect(opened.exam.status).toBe(ExamStatus.OPEN);
     expect(prismaMock.versions[0]?.manifestHash).toBe(published.manifestHash);
     expect(prismaMock.auditEvents).toHaveLength(8);
+  });
+
+  it('closes an open exam and starts grading once submissions exist', async () => {
+    const created = await service.createExam({
+      adminId: 'admin-1',
+      endsAt: '2026-04-22T11:00:00.000Z',
+      startsAt: '2026-04-22T10:00:00.000Z',
+      title: 'ProofMark Phase 7'
+    });
+    const examId = created.exam.id;
+
+    await prismaMock.prisma.exam.update({
+      where: {
+        id: examId
+      },
+      data: {
+        status: ExamStatus.OPEN
+      }
+    });
+
+    const closed = await service.closeExam({
+      adminId: 'admin-1',
+      examId
+    });
+    expect(closed.exam.status).toBe(ExamStatus.CLOSED);
+
+    prismaMock.submissions.push({
+      examId,
+      id: 'submission-1',
+      status: SubmissionStatus.ACCEPTED
+    });
+
+    const grading = await service.startGrading({
+      adminId: 'admin-1',
+      examId
+    });
+    expect(grading.exam.status).toBe(ExamStatus.GRADING);
   });
 });

@@ -87,6 +87,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@proofmark/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@proofmark/zk-semaphore':
         specifier: workspace:*
         version: link:../../packages/zk-semaphore
@@ -116,7 +119,29 @@ importers:
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.14)
 
-  apps/worker: {}
+  apps/worker:
+    dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1034.0
+        version: 3.1034.0
+      '@prisma/adapter-pg':
+        specifier: ^7.7.0
+        version: 7.7.0
+      '@prisma/client':
+        specifier: ^7.7.0
+        version: 7.7.0(prisma@7.7.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(typescript@6.0.3))(typescript@6.0.3)
+      '@proofmark/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
+      '@proofmark/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@proofmark/zk-grading-noir':
+        specifier: workspace:*
+        version: link:../../packages/zk-grading-noir
+      pg:
+        specifier: ^8.20.0
+        version: 8.20.0
 
   packages/audit-log: {}
 
@@ -124,7 +149,14 @@ importers:
 
   packages/shared: {}
 
-  packages/zk-grading-noir: {}
+  packages/zk-grading-noir:
+    dependencies:
+      '@proofmark/crypto':
+        specifier: workspace:*
+        version: link:../crypto
+      '@proofmark/shared':
+        specifier: workspace:*
+        version: link:../shared
 
   packages/zk-semaphore:
     dependencies:

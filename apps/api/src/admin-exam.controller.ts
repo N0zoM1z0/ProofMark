@@ -182,4 +182,26 @@ export class AdminExamController {
       examId
     });
   }
+
+  @Post(':examId/close')
+  async closeExam(
+    @Param('examId') examId: string,
+    @Headers('x-admin-id') adminId: string | undefined
+  ) {
+    return this.adminExamService.closeExam({
+      adminId: requireAdminId(adminId),
+      examId
+    });
+  }
+
+  @Post(':examId/grading')
+  async startGrading(
+    @Param('examId') examId: string,
+    @Headers('x-admin-id') adminId: string | undefined
+  ) {
+    return this.adminExamService.startGrading({
+      adminId: requireAdminId(adminId),
+      examId
+    });
+  }
 }

@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { createWorkerStatus } from '../src/index.js';
 
 describe('createWorkerStatus', () => {
-  it('returns the worker scaffold status', () => {
+  it('returns the worker readiness status', () => {
     expect(createWorkerStatus()).toEqual({
-      status: 'idle',
+      status: 'ready',
       service: 'worker'
     });
   });

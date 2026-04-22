@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException
 } from '@nestjs/common';
-import { ExamStatus, Prisma } from '@prisma/client';
+import { ExamStatus, Prisma, SubmissionStatus } from '@prisma/client';
 import {
   normalizeFixedMcqQuestionSet,
   type FixedMcqQuestionSet
@@ -745,6 +745,84 @@ export class AdminExamService {
         payload: {
           endsAt: updatedExam.endsAt?.toISOString() ?? null,
           startsAt: updatedExam.startsAt?.toISOString() ?? null,
+          status: updatedExam.status
+        }
+      });
+
+      return {
+        auditEventId: auditEvent.id,
+        exam: updatedExam
+      };
+    });
+  }
+
+  async closeExam(params: { examId: string; adminId: string }) {
+    const exam = await this.getExamOrThrow(params.examId);
+
+    if (exam.status !== ExamStatus.OPEN) {
+      throw new ConflictException('Exam must be OPEN before it can be closed');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedExam = await tx.exam.update({
+        where: {
+          id: params.examId
+        },
+        data: {
+          status: ExamStatus.CLOSED
+        }
+      });
+      const auditEvent = await appendAuditEvent(tx, {
+        actorRef: params.adminId,
+        actorRole: 'ADMIN',
+        eventType: 'ExamClosed',
+        examId: params.examId,
+        payload: {
+          status: updatedExam.status
+        }
+      });
+
+      return {
+        auditEventId: auditEvent.id,
+        exam: updatedExam
+      };
+    });
+  }
+
+  async startGrading(params: { examId: string; adminId: string }) {
+    const exam = await this.getExamOrThrow(params.examId);
+
+    if (exam.status !== ExamStatus.CLOSED) {
+      throw new ConflictException('Exam must be CLOSED before GRADING can start');
+    }
+
+    const acceptedSubmissionCount = await this.prisma.submission.count({
+      where: {
+        examId: params.examId,
+        status: SubmissionStatus.ACCEPTED
+      }
+    });
+
+    if (acceptedSubmissionCount === 0) {
+      throw new ConflictException('GRADING requires at least one accepted submission');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedExam = await tx.exam.update({
+        where: {
+          id: params.examId
+        },
+        data: {
+          status: ExamStatus.GRADING
+        }
+      });
+      const auditEvent = await appendAuditEvent(tx, {
+        actorRef: params.adminId,
+        actorRole: 'ADMIN',
+        eventType: 'ExamGradingStarted',
+        examId: params.examId,
+        payload: {
+          acceptedSubmissionCount,
           status: updatedExam.status
         }
       });

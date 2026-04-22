@@ -119,6 +119,16 @@ const transitionRules: TransitionRule[] = [
       )
   },
   {
+    from: 'CLOSED',
+    to: 'GRADING',
+    validate: (context) =>
+      requireFields(
+        context,
+        ['hasSubmissionRoot'],
+        'GRADING requires a frozen submission root'
+      )
+  },
+  {
     from: 'ASSIGNING',
     to: 'MARKING',
     validate: (context) =>

@@ -39,6 +39,12 @@ describe('exam lifecycle transitions', () => {
         hasGradingArtifacts: true
       })
     ).toEqual({ ok: true });
+
+    expect(
+      canTransitionExamStatus('CLOSED', 'GRADING', {
+        hasSubmissionRoot: true
+      })
+    ).toEqual({ ok: true });
   });
 
   it('rejects illegal transitions and missing prerequisites', () => {
