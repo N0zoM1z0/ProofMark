@@ -1,0 +1,242 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum ExamStatus {
+  DRAFT
+  COMMITTED
+  REGISTRATION
+  PUBLISHED
+  OPEN
+  CLOSED
+  ASSIGNING
+  MARKING
+  GRADING
+  FINALIZED
+  CLAIMING
+  ARCHIVED
+}
+
+enum EligibleCommitmentStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum SubmissionStatus {
+  ACCEPTED
+  REJECTED
+  DUPLICATE
+  VOIDED
+}
+
+enum ProofVerificationStatus {
+  PENDING
+  VERIFIED
+  INVALID
+}
+
+enum GradeStatus {
+  DRAFT
+  VERIFIED
+  FINALIZED
+  SUPERSEDED
+}
+
+enum ClaimStatus {
+  CLAIMED
+  REVOKED
+}
+
+model Exam {
+  id                   String                @id @default(uuid())
+  title                String
+  courseId             String?
+  status               ExamStatus            @default(DRAFT)
+  startsAt             DateTime?
+  endsAt               DateTime?
+  questionSetHash      String?
+  answerKeyCommitment  String?
+  gradingPolicyHash    String?
+  currentGroupRoot     String?
+  createdByRef         String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  versions             ExamVersion[]
+  eligibleCommitments  EligibleCommitment[]
+  registrarLinks       RegistrarIdentityLink[]
+  submissions          Submission[]
+  proofArtifacts       ProofArtifact[]
+  auditEvents          AuditEvent[]
+  auditRoots           AuditRoot[]
+  grades               Grade[]
+  gradeClaims          GradeClaim[]
+}
+
+model ExamVersion {
+  id              String   @id @default(uuid())
+  examId          String
+  version         Int
+  questionSetHash String
+  policyHash      String
+  manifestHash    String?
+  createdAt       DateTime @default(now())
+  auditEventId    String?
+  exam            Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, version])
+  @@index([examId, createdAt])
+}
+
+model EligibleCommitment {
+  id                 String                   @id @default(uuid())
+  examId             String
+  identityCommitment String
+  status             EligibleCommitmentStatus @default(ACTIVE)
+  addedByRef         String?
+  addedAt            DateTime                 @default(now())
+  auditEventId       String?
+  exam               Exam                     @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, identityCommitment])
+  @@index([examId, addedAt])
+}
+
+model RegistrarIdentityLink {
+  id                    String   @id @default(uuid())
+  examId                String
+  identityCommitment    String
+  realUserRefCiphertext String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  exam                  Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, identityCommitment])
+}
+
+model Submission {
+  id                String           @id @default(uuid())
+  examId            String
+  submissionIndex   Int
+  groupRoot         String
+  nullifierHash     String
+  messageHash       String
+  answerCommitment  String
+  encryptedBlobHash String
+  encryptedBlobUri  String
+  submittedAtBucket String
+  status            SubmissionStatus @default(ACCEPTED)
+  receiptHash       String?
+  auditEventId      String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  exam              Exam             @relation(fields: [examId], references: [id], onDelete: Cascade)
+  grades            Grade[]
+  gradeClaims       GradeClaim[]
+  proofArtifacts    ProofArtifact[]
+
+  @@unique([examId, nullifierHash])
+  @@unique([examId, submissionIndex])
+  @@index([examId, createdAt])
+}
+
+model ProofArtifact {
+  id                 String                  @id @default(uuid())
+  examId             String
+  submissionId       String?
+  type               String
+  circuitName        String?
+  circuitVersion     String?
+  vkHash             String?
+  publicInputsHash   String
+  proofHash          String
+  proofUri           String?
+  verificationStatus ProofVerificationStatus @default(PENDING)
+  createdAt          DateTime                @default(now())
+  exam               Exam                    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  submission         Submission?             @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+
+  @@index([examId, createdAt])
+  @@index([submissionId])
+}
+
+model AuditEvent {
+  id             String   @id @default(uuid())
+  examId         String
+  seq            Int
+  eventType      String
+  actorRole      String
+  actorPseudonym String?
+  payloadHash    String
+  prevEventHash  String?
+  eventHash      String
+  createdAt      DateTime @default(now())
+  exam           Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, seq])
+  @@unique([examId, eventHash])
+  @@index([examId, createdAt])
+}
+
+model AuditRoot {
+  id             String   @id @default(uuid())
+  examId         String
+  phase          String
+  fromSeq        Int
+  toSeq          Int
+  merkleRoot     String
+  prevPhaseRoot  String?
+  anchoredTxHash String?
+  createdAt      DateTime @default(now())
+  exam           Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, phase, toSeq])
+  @@index([examId, createdAt])
+}
+
+model Grade {
+  id                 String      @id @default(uuid())
+  examId             String
+  submissionId       String
+  objectiveScore     Decimal?    @db.Decimal(10, 2)
+  subjectiveScore    Decimal?    @db.Decimal(10, 2)
+  finalScore         Decimal?    @db.Decimal(10, 2)
+  maxScore           Decimal?    @db.Decimal(10, 2)
+  gradeCommitment    String?
+  proofArtifactsRoot String?
+  status             GradeStatus @default(DRAFT)
+  finalizedAt        DateTime?
+  auditEventId       String?
+  supersedesGradeId  String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  exam               Exam        @relation(fields: [examId], references: [id], onDelete: Cascade)
+  submission         Submission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  supersedesGrade    Grade?      @relation("GradeSupersession", fields: [supersedesGradeId], references: [id], onDelete: SetNull)
+  supersededBy       Grade[]     @relation("GradeSupersession")
+  gradeClaims        GradeClaim[]
+
+  @@index([examId, submissionId, status])
+  @@index([supersedesGradeId])
+}
+
+model GradeClaim {
+  id                      String      @id @default(uuid())
+  examId                  String
+  submissionId            String
+  gradeId                 String?
+  userReferenceCiphertext String
+  claimProofHash          String
+  claimedAt               DateTime    @default(now())
+  status                  ClaimStatus @default(CLAIMED)
+  auditEventId            String?
+  exam                    Exam        @relation(fields: [examId], references: [id], onDelete: Cascade)
+  submission              Submission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  grade                   Grade?      @relation(fields: [gradeId], references: [id], onDelete: SetNull)
+
+  @@unique([examId, submissionId])
+  @@index([examId, claimedAt])
+}
