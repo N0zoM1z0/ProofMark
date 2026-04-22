@@ -80,16 +80,31 @@ The repository currently includes:
 - Phase 4 anonymous submission verification and receipt issuance
 - Phase 5 admin authoring plus signed public manifests
 - Phase 6 student MCQ exam-taking flow with encrypted blob upload, Web Worker proof generation, encrypted local draft recovery, and browser-side receipt verification
+- Phase 7 objective grading proof generation in the worker
+- Phase 8 finalized anonymous grades and claim flow
+- Phase 9 public auditor console, audit root history, proof artifact explorer, and server-side receipt verification
 - an execution-ready implementation plan in [`docs/implementation-plan.md`](docs/implementation-plan.md)
 
-## Phase 6 Routes
+## Public Routes
 
 - `/student/register` for local Semaphore wallet creation, backup export, import, and roster commitment registration
 - `/student/exam` for loading the public exam, restoring encrypted drafts, encrypting answer blobs, generating the proof in a worker, and submitting anonymously
 - `/verify-receipt` for browser-side receipt verification without privileged API access
+- `/auditor` for manifest inspection, audit root history, group root history, proof artifact metadata, and receipt verification against stored server records
+
+## Public API Highlights
+
+- `GET /api/public/exams/:examId` for published exam metadata
+- `GET /api/public/exams/:examId/manifest` for the signed public manifest
+- `GET /api/public/exams/:examId/group` for the active Semaphore group snapshot
+- `GET /api/public/exams/:examId/audit-roots` for cumulative audit root and group root history
+- `GET /api/public/exams/:examId/proof-artifacts` for verified proof artifact metadata
+- `GET /api/public/exams/:examId/submissions/:submissionId/finalized-grade` for finalized grade and proof metadata
+- `POST /api/public/verify-receipt` for server-side receipt validation against stored records
 
 ## Additional Environment Notes
 
 - `PUBLIC_API_BASE_URL` is used by the submission upload flow to mint absolute upload URLs
 - `BLOB_ENCRYPTION_PRIVATE_KEY` controls the RSA key used for client-side answer blob encryption; `dev-static-proofmark-key` is only for local development
 - `UPLOAD_TOKEN_SECRET` signs one-time upload tokens for encrypted submission blobs
+- `MANIFEST_SIGNING_KEY` and `RECEIPT_SIGNING_KEY` should be set to stable long-lived Ed25519 keys outside local development if public verification needs to survive service restarts

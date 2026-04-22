@@ -3,7 +3,8 @@ import {
   createPrivateKey,
   createPublicKey,
   generateKeyPairSync,
-  sign
+  sign,
+  verify
 } from 'node:crypto';
 
 type CanonicalValue =
@@ -30,6 +31,11 @@ export interface SubmissionReceiptPayload {
     position: 'left' | 'right';
     hash: string;
   }>;
+}
+
+export interface SubmissionReceiptEnvelope extends SubmissionReceiptPayload {
+  serverPublicKey: string;
+  serverSignature: string;
 }
 
 export interface MerkleProofNode {
@@ -247,4 +253,48 @@ export function getReceiptPublicKeyPem() {
       format: 'pem'
     })
     .toString();
+}
+
+export function verifyReceiptSignature(receipt: SubmissionReceiptEnvelope) {
+  return verify(
+    null,
+    Buffer.from(
+      canonicalJson({
+        answerCommitment: receipt.answerCommitment,
+        auditEventHash: receipt.auditEventHash,
+        auditEventId: receipt.auditEventId,
+        auditInclusionProof: receipt.auditInclusionProof,
+        auditRoot: receipt.auditRoot,
+        encryptedBlobHash: receipt.encryptedBlobHash,
+        examId: receipt.examId,
+        messageHash: receipt.messageHash,
+        nullifierHash: receipt.nullifierHash,
+        submissionId: receipt.submissionId,
+        submittedAtBucket: receipt.submittedAtBucket,
+        version: receipt.version
+      })
+    ),
+    createPublicKey(receipt.serverPublicKey),
+    Buffer.from(receipt.serverSignature, 'base64url')
+  );
+}
+
+export function verifyReceiptEnvelope(receipt: SubmissionReceiptEnvelope) {
+  const signatureValid = verifyReceiptSignature(receipt);
+  let computedRoot = receipt.auditEventHash;
+
+  for (const node of receipt.auditInclusionProof) {
+    computedRoot =
+      node.position === 'left'
+        ? hashPair(node.hash, computedRoot)
+        : hashPair(computedRoot, node.hash);
+  }
+
+  const merkleProofValid = computedRoot === receipt.auditRoot;
+
+  return {
+    merkleProofValid,
+    signatureValid,
+    verified: signatureValid && merkleProofValid
+  };
 }

@@ -51,6 +51,16 @@ export class PublicExamController {
     return this.publicExamService.getPublicGroupSnapshot(examId);
   }
 
+  @Get(':examId/audit-roots')
+  async getAuditEvidence(@Param('examId') examId: string) {
+    return this.publicExamService.getAuditEvidence(examId);
+  }
+
+  @Get(':examId/proof-artifacts')
+  async getProofArtifacts(@Param('examId') examId: string) {
+    return this.publicExamService.getProofArtifacts(examId);
+  }
+
   @Get(':examId/submissions/:submissionId/finalized-grade')
   async getFinalizedGrade(
     @Param('examId') examId: string,

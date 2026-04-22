@@ -257,10 +257,12 @@ export class SubmissionService {
         submittedAtBucket,
         version: 'proofmark-receipt-v1'
       };
+      const serverPublicKey = getReceiptPublicKeyPem();
       const serverSignature = signReceiptPayload(receiptPayload);
       const receiptHash = sha256Hex(
         canonicalJson({
           payload: receiptPayload,
+          serverPublicKey,
           serverSignature
         })
       );
@@ -277,7 +279,7 @@ export class SubmissionService {
       return {
         receipt: {
           ...receiptPayload,
-          serverPublicKey: getReceiptPublicKeyPem(),
+          serverPublicKey,
           serverSignature
         },
         submissionId: submission.id

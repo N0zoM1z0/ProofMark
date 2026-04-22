@@ -6,6 +6,7 @@ import {
   ProofVerificationStatus
 } from '@prisma/client';
 import { PrismaService } from './prisma.service.js';
+import { AuditRootService } from './audit-root.service.js';
 import { getBlobEncryptionPublicKeyPem } from './blob-encryption.js';
 import {
   buildPublicExamManifest,
@@ -16,7 +17,10 @@ import { computeSubmitScope } from './submission-utils.js';
 
 @Injectable()
 export class PublicExamService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditRootService: AuditRootService
+  ) {}
 
   async getPublicExam(examId: string) {
     const exam = await this.prisma.exam.findUnique({
@@ -257,6 +261,116 @@ export class PublicExamService {
           }
         : null,
       submissionId: submission.id
+    };
+  }
+
+  async getAuditEvidence(examId: string) {
+    const exam = await this.prisma.exam.findUnique({
+      where: {
+        id: examId
+      },
+      select: {
+        id: true,
+        status: true
+      }
+    });
+
+    if (!exam) {
+      throw new NotFoundException('Exam not found');
+    }
+
+    const [auditRoots, groupRoots] = await Promise.all([
+      this.auditRootService.listAuditRoots(examId),
+      this.auditRootService.listGroupRoots(examId)
+    ]);
+
+    return {
+      auditRoots: auditRoots.snapshots,
+      currentAuditRoot: auditRoots.currentAuditRoot,
+      currentEventCount: auditRoots.currentEventCount,
+      examId: exam.id,
+      examStatus: exam.status,
+      groupRootHistory: groupRoots.history,
+      currentGroupRoot: groupRoots.currentGroupRoot
+    };
+  }
+
+  async getProofArtifacts(examId: string) {
+    const exam = await this.prisma.exam.findUnique({
+      where: {
+        id: examId
+      },
+      select: {
+        id: true,
+        status: true
+      }
+    });
+
+    if (!exam) {
+      throw new NotFoundException('Exam not found');
+    }
+
+    const proofArtifacts = await this.prisma.proofArtifact.findMany({
+      where: {
+        examId,
+        verificationStatus: ProofVerificationStatus.VERIFIED
+      },
+      orderBy: [
+        {
+          createdAt: 'asc'
+        },
+        {
+          id: 'asc'
+        }
+      ],
+      include: {
+        submission: {
+          select: {
+            id: true,
+            submissionIndex: true,
+            grades: {
+              orderBy: {
+                createdAt: 'desc'
+              },
+              take: 1,
+              select: {
+                finalScore: true,
+                finalizedAt: true,
+                gradeCommitment: true,
+                maxScore: true,
+                status: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return {
+      examId: exam.id,
+      examStatus: exam.status,
+      proofArtifacts: proofArtifacts.map((artifact) => ({
+        circuitName: artifact.circuitName,
+        circuitVersion: artifact.circuitVersion,
+        createdAt: artifact.createdAt,
+        proofArtifactId: artifact.id,
+        proofHash: artifact.proofHash,
+        publicInputsHash: artifact.publicInputsHash,
+        submissionId: artifact.submissionId,
+        submissionIndex: artifact.submission?.submissionIndex ?? null,
+        type: artifact.type,
+        verificationStatus: artifact.verificationStatus,
+        vkHash: artifact.vkHash,
+        grade: artifact.submission?.grades[0]
+          ? {
+              finalScore: artifact.submission.grades[0].finalScore,
+              finalizedAt: artifact.submission.grades[0].finalizedAt,
+              gradeCommitment: artifact.submission.grades[0].gradeCommitment,
+              maxScore: artifact.submission.grades[0].maxScore,
+              status: artifact.submission.grades[0].status
+            }
+          : null
+      }))
     };
   }
 }

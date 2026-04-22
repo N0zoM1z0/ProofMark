@@ -45,6 +45,11 @@ export default function HomePage() {
             <strong>Verify Receipt</strong>
             <p>Validate signatures and Merkle inclusion entirely in-browser.</p>
           </Link>
+          <Link href="/auditor" className="nav-tile">
+            <span className="eyebrow">Phase 9</span>
+            <strong>Auditor Console</strong>
+            <p>Inspect manifests, audit roots, proof metadata, and stored receipts.</p>
+          </Link>
         </div>
       </section>
     </main>

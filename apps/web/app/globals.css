@@ -142,6 +142,17 @@ body {
   display: none;
 }
 
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  align-items: end;
+}
+
+.grow {
+  flex: 1 1 20rem;
+}
+
 .split-grid {
   display: grid;
   gap: 1rem;
@@ -151,7 +162,7 @@ body {
 .link-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .nav-tile {
@@ -198,6 +209,36 @@ body {
 
 .meta-grid p {
   margin: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.code-block {
+  margin: 1.25rem 0 0;
+  padding: 1rem;
+  border-radius: 18px;
+  overflow-x: auto;
+  background: rgba(31, 26, 22, 0.92);
+  color: #f9f3eb;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.timeline-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.timeline-card {
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(31, 26, 22, 0.1);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.timeline-copy {
+  margin: 0.35rem 0 0;
   overflow-wrap: anywhere;
   line-height: 1.6;
 }
@@ -256,6 +297,22 @@ body {
   display: grid;
   gap: 0.65rem;
   margin-top: 1rem;
+}
+
+@media (max-width: 720px) {
+  .shell {
+    width: min(920px, calc(100% - 1.5rem));
+    padding: 2.5rem 0 3rem;
+  }
+
+  .split-grid,
+  .meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-form {
+    align-items: stretch;
+  }
 }
 
 .choice-row {
