@@ -9,6 +9,7 @@ import {
   Post,
   Put
 } from '@nestjs/common';
+import { AdminAuthService } from './admin-auth.service.js';
 import { AdminExamService } from './admin-exam.service.js';
 import { MarkingService } from './marking.service.js';
 
@@ -49,26 +50,28 @@ type GenerateAssignmentsBody = {
   seed?: string;
 };
 
-function requireAdminId(adminId: string | undefined) {
-  if (!adminId?.trim()) {
-    throw new BadRequestException('Missing x-admin-id header');
-  }
-
-  return adminId;
-}
-
 @Controller('api/admin/exams')
 export class AdminExamController {
   constructor(
+    @Inject(AdminAuthService)
+    private readonly adminAuthService: AdminAuthService,
     @Inject(AdminExamService)
     private readonly adminExamService: AdminExamService,
     @Inject(MarkingService)
     private readonly markingService: MarkingService
   ) {}
 
+  private authorizeAdmin(adminId: string | undefined, mfaCode: string | undefined) {
+    return this.adminAuthService.authorize({
+      adminId,
+      mfaCode
+    });
+  }
+
   @Post()
   async createExam(
     @Headers('x-admin-id') adminId: string | undefined,
+    @Headers('x-admin-mfa-code') mfaCode: string | undefined,
     @Body() body: CreateExamBody
   ) {
     if (!body.title?.trim()) {
@@ -76,7 +79,7 @@ export class AdminExamController {
     }
 
     return this.adminExamService.createExam({
-      adminId: requireAdminId(adminId),
+      adminId: this.authorizeAdmin(adminId, mfaCode),
       courseId: body.courseId,
       endsAt: body.endsAt,
       startsAt: body.startsAt,
@@ -88,10 +91,11 @@ export class AdminExamController {
   async updateExam(
     @Param('examId') examId: string,
     @Headers('x-admin-id') adminId: string | undefined,
+    @Headers('x-admin-mfa-code') mfaCode: string | undefined,
     @Body() body: UpdateExamBody
   ) {
     return this.adminExamService.updateExam({
-      adminId: requireAdminId(adminId),
+      adminId: this.authorizeAdmin(adminId, mfaCode),
       courseId: body.courseId,
       endsAt: body.endsAt,
       examId,
@@ -104,6 +108,7 @@ export class AdminExamController {
   async setQuestionSet(
     @Param('examId') examId: string,
     @Headers('x-admin-id') adminId: string | undefined,
+    @Headers('x-admin-mfa-code') mfaCode: string | undefined,
     @Body() body: QuestionSetBody
   ) {
     if (body.questionSet === undefined) {
@@ -111,7 +116,7 @@ export class AdminExamController {
     }
 
     return this.adminExamService.setQuestionSet({
-      adminId: requireAdminId(adminId),
+      adminId: this.authorizeAdmin(adminId, mfaCode),
       examId,
       questionSet: body.questionSet
     });
@@ -121,6 +126,7 @@ export class AdminExamController {
   async setAnswerKeyCommitment(
     @Param('examId') examId: string,
     @Headers('x-admin-id') adminId: string | undefined,
+    @Headers('x-admin-mfa-code') mfaCode: string | undefined,
     @Body() body: AnswerKeyBody
   ) {
     if (body.answerKey === undefined || !body.salt) {
@@ -128,7 +134,7 @@ export class AdminExamController {
     }
 
     return this.adminExamService.setAnswerKeyCommitment({
-      adminId: requireAdminId(adminId),
+      adminId: this.authorizeAdmin(adminId, mfaCode),
       answerKey: body.answerKey,
       examId,
       salt: body.salt
@@ -139,6 +145,7 @@ export class AdminExamController {
   async setGradingPolicy(
     @Param('examId') examId: string,
     @Headers('x-admin-id') adminId: string | undefined,
+    @Headers('x-admin-mfa-code') mfaCode: string | undefined,
     @Body() body: GradingPolicyBody
   ) {
     if (body.gradingPolicy === undefined) {
@@ -146,7 +153,7 @@ export class AdminExamController {
     }
 
     return this.adminExamService.setGradingPolicy({
-      adminId: requireAdminId(adminId),
+      adminId: this.authorizeAdmin(adminId, mfaCode),
       examId,
       gradingPolicy: body.gradingPolicy
     });
@@ -155,10 +162,11 @@ export class AdminExamController {
   @Post(':examId/commit')
   async commitExam(
     @Param('examId') examId: string,
-    @Headers('x-admin-id') adminId: string | undefined
+    @Headers('x-admin-id') adminId: string | undefined,
+    @Headers('x-admin-mfa-code') mfaCode: string | undefined
   ) {
     return this.adminExamService.commitExam({
-      adminId: requireAdminId(adminId),
+      adminId: this.authorizeAdmin(adminId, mfaCode),
       examId
     });
   }
@@ -166,10 +174,11 @@ export class AdminExamController {
   @Post(':examId/registration')
   async openRegistration(
     @Param('examId') examId: string,
-    @Headers('x-admin-id') adminId: string | undefined
+    @Headers('x-admin-id') adminId: string | undefined,
+    @Headers('x-admin-mfa-code') mfaCode: string | undefined
   ) {
     return this.adminExamService.openRegistration({
-      adminId: requireAdminId(adminId),
+      adminId: this.authorizeAdmin(adminId, mfaCode),
       examId
     });
   }
@@ -177,10 +186,11 @@ export class AdminExamController {
   @Post(':examId/publish')
   async publishExam(
     @Param('examId') examId: string,
-    @Headers('x-admin-id') adminId: string | undefined
+    @Headers('x-admin-id') adminId: string | undefined,
+    @Headers('x-admin-mfa-code') mfaCode: string | undefined
   ) {
     return this.adminExamService.publishExam({
-      adminId: requireAdminId(adminId),
+      adminId: this.authorizeAdmin(adminId, mfaCode),
       examId
     });
   }
@@ -188,10 +198,11 @@ export class AdminExamController {
   @Post(':examId/open')
   async openExam(
     @Param('examId') examId: string,
-    @Headers('x-admin-id') adminId: string | undefined
+    @Headers('x-admin-id') adminId: string | undefined,
+    @Headers('x-admin-mfa-code') mfaCode: string | undefined
   ) {
     return this.adminExamService.openExam({
-      adminId: requireAdminId(adminId),
+      adminId: this.authorizeAdmin(adminId, mfaCode),
       examId
     });
   }
@@ -199,10 +210,11 @@ export class AdminExamController {
   @Post(':examId/close')
   async closeExam(
     @Param('examId') examId: string,
-    @Headers('x-admin-id') adminId: string | undefined
+    @Headers('x-admin-id') adminId: string | undefined,
+    @Headers('x-admin-mfa-code') mfaCode: string | undefined
   ) {
     return this.adminExamService.closeExam({
-      adminId: requireAdminId(adminId),
+      adminId: this.authorizeAdmin(adminId, mfaCode),
       examId
     });
   }
@@ -210,10 +222,11 @@ export class AdminExamController {
   @Post(':examId/grading')
   async startGrading(
     @Param('examId') examId: string,
-    @Headers('x-admin-id') adminId: string | undefined
+    @Headers('x-admin-id') adminId: string | undefined,
+    @Headers('x-admin-mfa-code') mfaCode: string | undefined
   ) {
     return this.adminExamService.startGrading({
-      adminId: requireAdminId(adminId),
+      adminId: this.authorizeAdmin(adminId, mfaCode),
       examId
     });
   }
@@ -221,10 +234,11 @@ export class AdminExamController {
   @Post(':examId/finalize')
   async finalizeExam(
     @Param('examId') examId: string,
-    @Headers('x-admin-id') adminId: string | undefined
+    @Headers('x-admin-id') adminId: string | undefined,
+    @Headers('x-admin-mfa-code') mfaCode: string | undefined
   ) {
     return this.adminExamService.finalizeExam({
-      adminId: requireAdminId(adminId),
+      adminId: this.authorizeAdmin(adminId, mfaCode),
       examId
     });
   }
@@ -232,10 +246,11 @@ export class AdminExamController {
   @Post(':examId/claiming')
   async openClaiming(
     @Param('examId') examId: string,
-    @Headers('x-admin-id') adminId: string | undefined
+    @Headers('x-admin-id') adminId: string | undefined,
+    @Headers('x-admin-mfa-code') mfaCode: string | undefined
   ) {
     return this.adminExamService.openClaiming({
-      adminId: requireAdminId(adminId),
+      adminId: this.authorizeAdmin(adminId, mfaCode),
       examId
     });
   }
@@ -244,6 +259,7 @@ export class AdminExamController {
   async enrollMarker(
     @Param('examId') examId: string,
     @Headers('x-admin-id') adminId: string | undefined,
+    @Headers('x-admin-mfa-code') mfaCode: string | undefined,
     @Body() body: EnrollMarkerBody
   ) {
     if (!body.markerLabel?.trim()) {
@@ -251,7 +267,7 @@ export class AdminExamController {
     }
 
     return this.markingService.enrollMarker({
-      adminId: requireAdminId(adminId),
+      adminId: this.authorizeAdmin(adminId, mfaCode),
       examId,
       markerLabel: body.markerLabel,
       markerRef: body.markerRef
@@ -262,6 +278,7 @@ export class AdminExamController {
   async generateAssignments(
     @Param('examId') examId: string,
     @Headers('x-admin-id') adminId: string | undefined,
+    @Headers('x-admin-mfa-code') mfaCode: string | undefined,
     @Body() body: GenerateAssignmentsBody
   ) {
     if (!body.seed?.trim()) {
@@ -269,7 +286,7 @@ export class AdminExamController {
     }
 
     return this.markingService.generateAssignments({
-      adminId: requireAdminId(adminId),
+      adminId: this.authorizeAdmin(adminId, mfaCode),
       dueAt: body.dueAt,
       examId,
       seed: body.seed

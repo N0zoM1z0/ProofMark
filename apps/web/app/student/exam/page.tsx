@@ -1,10 +1,15 @@
 'use client';
 
+import { Group } from '@semaphore-protocol/group';
 import {
   createFixedMcqAnswerSheet,
   normalizeFixedMcqQuestionSet,
   type FixedMcqQuestionSet
 } from '@proofmark/shared';
+import {
+  createIdentity,
+  generateSemaphoreMembershipProof
+} from '@proofmark/zk-semaphore';
 import { get } from 'idb-keyval';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -76,44 +81,65 @@ type ProofWorkerResponse =
       ok: false;
     };
 
+async function generateProofDirect(params: {
+  identityExport: string;
+  memberCommitments: string[];
+  message: string;
+  scope: string;
+}) {
+  const group = new Group(params.memberCommitments.map((item) => BigInt(item)));
+  const identity = createIdentity(params.identityExport);
+
+  return generateSemaphoreMembershipProof({
+    group,
+    identity,
+    message: params.message,
+    scope: params.scope
+  });
+}
+
 async function generateProof(params: {
   identityExport: string;
   memberCommitments: string[];
   message: string;
   scope: string;
 }) {
-  const worker = new Worker(new URL('./proof-worker.ts', import.meta.url), {
-    type: 'module'
-  });
+  try {
+    const worker = new Worker(new URL('./proof-worker.ts', import.meta.url), {
+      type: 'module'
+    });
 
-  return new Promise<{
-    merkleTreeDepth: number;
-    merkleTreeRoot: string;
-    message: string;
-    nullifier: string;
-    points: string[];
-    scope: string;
-  }>((resolve, reject) => {
-    worker.onmessage = (event: MessageEvent<ProofWorkerResponse>) => {
-      worker.terminate();
+    return await new Promise<{
+      merkleTreeDepth: number;
+      merkleTreeRoot: string;
+      message: string;
+      nullifier: string;
+      points: string[];
+      scope: string;
+    }>((resolve, reject) => {
+      worker.onmessage = (event: MessageEvent<ProofWorkerResponse>) => {
+        worker.terminate();
 
-      if (event.data.ok) {
-        resolve(event.data.proof);
-        return;
-      }
+        if (event.data.ok) {
+          resolve(event.data.proof);
+          return;
+        }
 
-      reject(new Error(event.data.error));
-    };
-    worker.onerror = (event) => {
-      worker.terminate();
-      reject(
-        event.error instanceof Error
-          ? event.error
-          : new Error('Proof generation crashed')
-      );
-    };
-    worker.postMessage(params);
-  });
+        reject(new Error(event.data.error));
+      };
+      worker.onerror = (event) => {
+        worker.terminate();
+        reject(
+          event.error instanceof Error
+            ? event.error
+            : new Error('Proof generation crashed')
+        );
+      };
+      worker.postMessage(params);
+    });
+  } catch {
+    return generateProofDirect(params);
+  }
 }
 
 export default function StudentExamPage() {

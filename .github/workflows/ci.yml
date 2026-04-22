@@ -6,6 +6,27 @@ on:
       - main
   pull_request:
 
+env:
+  ADMIN_IDS: admin-demo
+  ADMIN_MFA_SECRET: proofmark-dev-admin-mfa-secret
+  BLOB_ENCRYPTION_PRIVATE_KEY: dev-static-proofmark-key
+  DATABASE_URL: postgresql://proofmark:proofmark@127.0.0.1:55432/proofmark
+  LOG_REDACTION_SALT: proofmark-ci-log-salt
+  MANIFEST_SIGNING_KEY: dev-generate-on-boot
+  NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:3001
+  NODE_ENV: test
+  PORT: 3001
+  PUBLIC_API_BASE_URL: http://127.0.0.1:3001
+  RECEIPT_SIGNING_KEY: dev-generate-on-boot
+  S3_ACCESS_KEY: minioadmin
+  S3_BUCKET: proofmark-local
+  S3_ENDPOINT: http://127.0.0.1:59000
+  S3_FORCE_PATH_STYLE: 'true'
+  S3_REGION: us-east-1
+  S3_SECRET_KEY: minioadmin
+  UPLOAD_TOKEN_SECRET: proofmark-ci-upload-secret
+  WEB_ORIGIN: http://127.0.0.1:3000
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -28,6 +49,9 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Validate Prisma Schema
+        run: pnpm db:validate
+
       - name: Lint
         run: pnpm lint
 
@@ -36,3 +60,47 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Dependency Audit
+        run: pnpm audit:dependencies
+
+  smoke:
+    runs-on: ubuntu-latest
+    needs: verify
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.10.0
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Start Infra
+        run: docker compose up -d
+
+      - name: Apply Migrations
+        run: pnpm db:migrate:deploy
+
+      - name: Start API
+        run: pnpm --filter @proofmark/api dev > /tmp/proofmark-api.log 2>&1 &
+
+      - name: Run Full Smoke
+        run: pnpm test:smoke
+
+      - name: Upload API Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: proofmark-api-log
+          path: /tmp/proofmark-api.log

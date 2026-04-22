@@ -53,6 +53,14 @@ pnpm test
 pnpm build
 ```
 
+Run the beta verification matrix:
+
+```bash
+pnpm verify:beta
+pnpm test:smoke
+pnpm test:load
+```
+
 Run the applications in development mode:
 
 ```bash
@@ -84,6 +92,7 @@ The repository currently includes:
 - Phase 8 finalized anonymous grades and claim flow
 - Phase 9 public auditor console, audit root history, proof artifact explorer, and server-side receipt verification
 - Phase 10 blind marking workflow with subjective submission slicing, deterministic assignment generation, local marker pseudonym signing, adjudication, and subjective grade aggregation
+- Phase 12 beta hardening with privacy-safe structured request logs, admin MFA gates, rate limits, payload guards, CSP/security headers, operator runbooks, and automated smoke/load/browser verification
 - an execution-ready implementation plan in [`docs/implementation-plan.md`](docs/implementation-plan.md)
 
 ## Public Routes
@@ -113,3 +122,15 @@ The repository currently includes:
 - `BLOB_ENCRYPTION_PRIVATE_KEY` controls the RSA key used for client-side answer blob encryption; `dev-static-proofmark-key` is only for local development
 - `UPLOAD_TOKEN_SECRET` signs one-time upload tokens for encrypted submission blobs
 - `MANIFEST_SIGNING_KEY` and `RECEIPT_SIGNING_KEY` should be set to stable long-lived Ed25519 keys outside local development if public verification needs to survive service restarts
+- `ADMIN_IDS` and `ADMIN_MFA_SECRET` protect all admin mutation endpoints; local examples are included in `.env.example`
+- `LOG_REDACTION_SALT` salts hashed principals in structured request logs
+
+## Verification and Operations
+
+- `pnpm seed:demo` seeds one committed exam in `REGISTRATION`, ready for a browser wallet to register before admin publish/open
+- `pnpm test:smoke` runs the full register -> submit -> mark -> grade -> claim -> verify lifecycle
+- `pnpm test:load` runs a concurrent registration/submission/grading smoke for capacity regression checks
+- `pnpm test:playwright` runs a browser-level registration/submission/receipt verification smoke
+- `npm_config_registry=https://registry.npmjs.org pnpm audit --prod` reports one remaining moderate advisory in Prisma's bundled dev tooling; details live in [`docs/runbooks.md`](docs/runbooks.md)
+- [`docs/runbooks.md`](docs/runbooks.md) covers bring-up, MFA, key rotation, and recovery steps
+- [`docs/privacy-model.md`](docs/privacy-model.md) documents the identity-separation and log-redaction model

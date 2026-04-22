@@ -7,6 +7,10 @@ import {
 } from '@nestjs/common';
 import { ExamStatus, SubmissionStatus } from '@prisma/client';
 import { verifyProof } from '@semaphore-protocol/proof';
+import {
+  createAuditEventWithRetry,
+  isRetryableAuditConflictError
+} from './audit-event-write.js';
 import { BlobStorageService } from './blob-storage.service.js';
 import { PrismaService } from './prisma.service.js';
 import {
@@ -133,157 +137,155 @@ export class SubmissionService {
       encryptedBlobHash: input.encryptedBlobHash
     });
 
-    return this.prisma.$transaction(async (tx) => {
-      const duplicateSubmission = await tx.submission.findUnique({
-        where: {
-          examId_nullifierHash: {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          const duplicateSubmission = await tx.submission.findUnique({
+            where: {
+              examId_nullifierHash: {
+                examId: exam.id,
+                nullifierHash: input.nullifierHash
+              }
+            }
+          });
+
+          if (duplicateSubmission) {
+            throw new ConflictException('NULLIFIER_ALREADY_USED');
+          }
+
+          const submissionIndex =
+            (await tx.submission.count({
+              where: {
+                examId: exam.id
+              }
+            })) + 1;
+          const submittedAt = new Date();
+          const submittedAtBucket = formatSubmittedAtBucket(submittedAt);
+          const payload = {
+            answerCommitment: input.answerCommitment,
+            encryptedBlobHash: input.encryptedBlobHash,
+            nullifierHash: input.nullifierHash,
+            submissionIndex
+          };
+          const payloadHash = sha256Hex(canonicalJson(payload));
+          const submission = await tx.submission.create({
+            data: {
+              answerCommitment: input.answerCommitment,
+              encryptedBlobHash: input.encryptedBlobHash,
+              encryptedBlobUri: input.encryptedBlobUri,
+              examId: exam.id,
+              groupRoot: input.groupRoot,
+              messageHash: input.message,
+              nullifierHash: input.nullifierHash,
+              status: SubmissionStatus.ACCEPTED,
+              submissionIndex,
+              submittedAtBucket
+            }
+          });
+          const auditEvent = await createAuditEventWithRetry(tx, {
             examId: exam.id,
-            nullifierHash: input.nullifierHash
-          }
-        }
-      });
+            buildEvent: ({ createdAt, prevEventHash, seq }) => ({
+              actorRole: 'SUBMISSION_GATEWAY',
+              createdAt,
+              eventHash: sha256Hex(
+                canonicalJson({
+                  actorPseudonym: null,
+                  actorRole: 'SUBMISSION_GATEWAY',
+                  createdAt: createdAt.toISOString(),
+                  eventType: 'SubmissionAccepted',
+                  examId: exam.id,
+                  payloadHash,
+                  prevEventHash,
+                  seq
+                })
+              ),
+              eventType: 'SubmissionAccepted',
+              examId: exam.id,
+              payloadHash,
+              prevEventHash,
+              seq
+            })
+          });
 
-      if (duplicateSubmission) {
-        throw new ConflictException('NULLIFIER_ALREADY_USED');
+          await tx.submission.update({
+            where: {
+              id: submission.id
+            },
+            data: {
+              auditEventId: auditEvent.id
+            }
+          });
+
+          const eventHashes = (
+            await tx.auditEvent.findMany({
+              where: {
+                examId: exam.id
+              },
+              orderBy: {
+                seq: 'asc'
+              },
+              select: {
+                eventHash: true,
+                id: true
+              }
+            })
+          ).map((event) => event.eventHash);
+          const auditRoot = calculateMerkleRoot(eventHashes) ?? auditEvent.eventHash;
+          const auditInclusionProof = createMerkleProof(
+            eventHashes,
+            eventHashes.length - 1
+          );
+          const receiptPayload: SubmissionReceiptPayload = {
+            answerCommitment: submission.answerCommitment,
+            auditEventHash: auditEvent.eventHash,
+            auditEventId: auditEvent.id,
+            auditInclusionProof,
+            auditRoot,
+            encryptedBlobHash: submission.encryptedBlobHash,
+            examId: exam.id,
+            messageHash: submission.messageHash,
+            nullifierHash: submission.nullifierHash,
+            submissionId: submission.id,
+            submittedAtBucket,
+            version: 'proofmark-receipt-v1'
+          };
+          const serverPublicKey = getReceiptPublicKeyPem();
+          const serverSignature = signReceiptPayload(receiptPayload);
+          const receiptHash = sha256Hex(
+            canonicalJson({
+              payload: receiptPayload,
+              serverPublicKey,
+              serverSignature
+            })
+          );
+
+          await tx.submission.update({
+            where: {
+              id: submission.id
+            },
+            data: {
+              receiptHash
+            }
+          });
+
+          return {
+            receipt: {
+              ...receiptPayload,
+              serverPublicKey,
+              serverSignature
+            },
+            submissionId: submission.id
+          };
+        });
+      } catch (error) {
+        if (isRetryableAuditConflictError(error) && attempt < 4) {
+          continue;
+        }
+
+        throw error;
       }
+    }
 
-      const submissionIndex =
-        (await tx.submission.count({
-          where: {
-            examId: exam.id
-          }
-        })) + 1;
-      const submittedAt = new Date();
-      const submittedAtBucket = formatSubmittedAtBucket(submittedAt);
-      const previousAuditEvent = await tx.auditEvent.findFirst({
-        where: {
-          examId: exam.id
-        },
-        orderBy: {
-          seq: 'desc'
-        }
-      });
-      const seq =
-        (await tx.auditEvent.count({
-          where: {
-            examId: exam.id
-          }
-        })) + 1;
-      const payload = {
-        answerCommitment: input.answerCommitment,
-        encryptedBlobHash: input.encryptedBlobHash,
-        nullifierHash: input.nullifierHash,
-        submissionIndex
-      };
-      const payloadHash = sha256Hex(canonicalJson(payload));
-      const eventHash = sha256Hex(
-        canonicalJson({
-          actorPseudonym: null,
-          actorRole: 'SUBMISSION_GATEWAY',
-          createdAt: submittedAt.toISOString(),
-          eventType: 'SubmissionAccepted',
-          examId: exam.id,
-          payloadHash,
-          prevEventHash: previousAuditEvent?.eventHash ?? null,
-          seq
-        })
-      );
-      const submission = await tx.submission.create({
-        data: {
-          answerCommitment: input.answerCommitment,
-          encryptedBlobHash: input.encryptedBlobHash,
-          encryptedBlobUri: input.encryptedBlobUri,
-          examId: exam.id,
-          groupRoot: input.groupRoot,
-          messageHash: input.message,
-          nullifierHash: input.nullifierHash,
-          status: SubmissionStatus.ACCEPTED,
-          submissionIndex,
-          submittedAtBucket
-        }
-      });
-      const auditEvent = await tx.auditEvent.create({
-        data: {
-          actorRole: 'SUBMISSION_GATEWAY',
-          createdAt: submittedAt,
-          eventHash,
-          eventType: 'SubmissionAccepted',
-          examId: exam.id,
-          payloadHash,
-          prevEventHash: previousAuditEvent?.eventHash ?? null,
-          seq
-        }
-      });
-
-      await tx.submission.update({
-        where: {
-          id: submission.id
-        },
-        data: {
-          auditEventId: auditEvent.id
-        }
-      });
-
-      const eventHashes = (
-        await tx.auditEvent.findMany({
-          where: {
-            examId: exam.id
-          },
-          orderBy: {
-            seq: 'asc'
-          },
-          select: {
-            eventHash: true,
-            id: true
-          }
-        })
-      ).map((event) => event.eventHash);
-      const auditRoot = calculateMerkleRoot(eventHashes) ?? auditEvent.eventHash;
-      const auditInclusionProof = createMerkleProof(
-        eventHashes,
-        eventHashes.length - 1
-      );
-      const receiptPayload: SubmissionReceiptPayload = {
-        answerCommitment: submission.answerCommitment,
-        auditEventHash: auditEvent.eventHash,
-        auditEventId: auditEvent.id,
-        auditInclusionProof,
-        auditRoot,
-        encryptedBlobHash: submission.encryptedBlobHash,
-        examId: exam.id,
-        messageHash: submission.messageHash,
-        nullifierHash: submission.nullifierHash,
-        submissionId: submission.id,
-        submittedAtBucket,
-        version: 'proofmark-receipt-v1'
-      };
-      const serverPublicKey = getReceiptPublicKeyPem();
-      const serverSignature = signReceiptPayload(receiptPayload);
-      const receiptHash = sha256Hex(
-        canonicalJson({
-          payload: receiptPayload,
-          serverPublicKey,
-          serverSignature
-        })
-      );
-
-      await tx.submission.update({
-        where: {
-          id: submission.id
-        },
-        data: {
-          receiptHash
-        }
-      });
-
-      return {
-        receipt: {
-          ...receiptPayload,
-          serverPublicKey,
-          serverSignature
-        },
-        submissionId: submission.id
-      };
-    });
+    throw new ConflictException('AUDIT_APPEND_RETRY_EXHAUSTED');
   }
 }

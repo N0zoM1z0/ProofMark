@@ -14,6 +14,7 @@ import {
   type FixedMcqGradingPolicy
 } from '@proofmark/zk-grading-noir';
 import { decryptSubmissionBlobPayload } from './blob-encryption.js';
+import { getWorkerRuntimeConfig } from './config.js';
 
 function parseBlobUri(blobUri: string) {
   const match = /^s3:\/\/([^/]+)\/(.+)$/.exec(blobUri);
@@ -62,6 +63,10 @@ function actorPseudonym(examId: string, submissionId: string) {
   return sha256Hex(`worker:${examId}:${submissionId}`).slice(0, 16);
 }
 
+function toNumber(value: unknown) {
+  return value === null || value === undefined ? 0 : Number(value);
+}
+
 export function createWorkerStatus() {
   return {
     service: 'worker',
@@ -70,21 +75,20 @@ export function createWorkerStatus() {
 }
 
 export class ObjectiveGradingWorker {
+  private readonly config = getWorkerRuntimeConfig();
   private readonly prisma = new PrismaClient({
     adapter: new PrismaPg({
-      connectionString:
-        process.env.DATABASE_URL ??
-        'postgresql://proofmark:proofmark@127.0.0.1:55432/proofmark'
+      connectionString: this.config.databaseUrl
     })
   });
   private readonly s3 = new S3Client({
     credentials: {
-      accessKeyId: process.env.S3_ACCESS_KEY ?? 'minioadmin',
-      secretAccessKey: process.env.S3_SECRET_KEY ?? 'minioadmin'
+      accessKeyId: this.config.s3AccessKey,
+      secretAccessKey: this.config.s3SecretKey
     },
-    endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:59000',
-    forcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? 'true') === 'true',
-    region: process.env.S3_REGION ?? 'us-east-1'
+    endpoint: this.config.s3Endpoint,
+    forcePathStyle: this.config.s3ForcePathStyle,
+    region: this.config.s3Region
   });
 
   async processSubmission(submissionId: string) {
@@ -233,25 +237,65 @@ export class ObjectiveGradingWorker {
           vkHash: proof.verificationKeyHash
         }
       });
-      const grade = await tx.grade.create({
-        data: {
-          auditEventId: auditEvent.id,
+      const existingGrade = await tx.grade.findFirst({
+        where: {
           examId: submission.examId,
-          finalScore: proof.publicInputs.score,
-          gradeCommitment: `sha256:${sha256Hex(
-            canonicalJson({
-              maxScore: proof.publicInputs.maxScore,
-              score: proof.publicInputs.score,
-              submissionId: submission.id
-            })
-          )}`,
-          maxScore: proof.publicInputs.maxScore,
-          objectiveScore: proof.publicInputs.score,
-          proofArtifactsRoot: proof.proofHash,
-          status: GradeStatus.VERIFIED,
+          status: {
+            in: [GradeStatus.DRAFT, GradeStatus.VERIFIED]
+          },
           submissionId: submission.id
+        },
+        orderBy: {
+          createdAt: 'desc'
         }
       });
+      const grade = existingGrade
+        ? await tx.grade.update({
+            where: {
+              id: existingGrade.id
+            },
+            data: {
+              auditEventId: auditEvent.id,
+              finalScore:
+                proof.publicInputs.score + toNumber(existingGrade.subjectiveScore),
+              gradeCommitment: `sha256:${sha256Hex(
+                canonicalJson({
+                  objectiveScore: proof.publicInputs.score,
+                  subjectiveScore: toNumber(existingGrade.subjectiveScore),
+                  submissionId: submission.id,
+                  version: 'proofmark-grade-commitment-v2'
+                })
+              )}`,
+              maxScore:
+                proof.publicInputs.maxScore +
+                Math.max(
+                  toNumber(existingGrade.maxScore) - toNumber(existingGrade.objectiveScore),
+                  0
+                ),
+              objectiveScore: proof.publicInputs.score,
+              proofArtifactsRoot: proof.proofHash,
+              status: GradeStatus.VERIFIED
+            }
+          })
+        : await tx.grade.create({
+            data: {
+              auditEventId: auditEvent.id,
+              examId: submission.examId,
+              finalScore: proof.publicInputs.score,
+              gradeCommitment: `sha256:${sha256Hex(
+                canonicalJson({
+                  maxScore: proof.publicInputs.maxScore,
+                  score: proof.publicInputs.score,
+                  submissionId: submission.id
+                })
+              )}`,
+              maxScore: proof.publicInputs.maxScore,
+              objectiveScore: proof.publicInputs.score,
+              proofArtifactsRoot: proof.proofHash,
+              status: GradeStatus.VERIFIED,
+              submissionId: submission.id
+            }
+          });
 
       return {
         auditEventId: auditEvent.id,

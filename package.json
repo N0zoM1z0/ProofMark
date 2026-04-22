@@ -7,14 +7,22 @@
     "build": "corepack pnpm -r --if-present build",
     "dev": "echo \"Run app-level dev scripts with pnpm --filter\"",
     "db:generate": "corepack pnpm exec prisma generate --schema prisma/schema.prisma",
+    "db:migrate:deploy": "corepack pnpm exec prisma migrate deploy --schema prisma/schema.prisma",
     "db:migrate:dev": "corepack pnpm exec prisma migrate dev --schema prisma/schema.prisma",
     "db:validate": "corepack pnpm exec prisma validate --schema prisma/schema.prisma",
     "lint": "corepack pnpm -r --if-present lint",
     "test": "corepack pnpm -r --if-present test",
+    "test:load": "tsx scripts/loadtest.ts",
+    "test:playwright": "playwright test",
+    "test:smoke": "tsx scripts/e2e-smoke.ts",
+    "audit:dependencies": "corepack pnpm audit --audit-level high --prod",
+    "seed:demo": "tsx scripts/seed-demo.ts",
+    "verify:beta": "corepack pnpm db:validate && corepack pnpm lint && corepack pnpm test && corepack pnpm build",
     "format": "prettier --check .",
     "format:write": "prettier --write ."
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@eslint/js": "^10.0.1",
     "@types/node": "^25.6.0",
     "dotenv": "^17.4.2",
@@ -29,5 +37,11 @@
   },
   "dependencies": {
     "@prisma/client": "^7.7.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "snarkjs": "0.7.5",
+      "underscore": "^1.13.8"
+    }
   }
 }

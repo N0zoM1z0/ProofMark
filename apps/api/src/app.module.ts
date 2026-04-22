@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AdminAuthService } from './admin-auth.service.js';
 import { AdminExamController } from './admin-exam.controller.js';
 import { AdminExamService } from './admin-exam.service.js';
 import { AuditRootService } from './audit-root.service.js';
@@ -32,6 +33,7 @@ import { StudentRegistrationService } from './student-registration.service.js';
     MarkerController
   ],
   providers: [
+    AdminAuthService,
     AdminExamService,
     AuditRootService,
     AppService,

@@ -7,6 +7,10 @@ import {
 import { Group } from '@semaphore-protocol/group';
 import { EligibleCommitmentStatus, ExamStatus } from '@prisma/client';
 import { createHash } from 'node:crypto';
+import {
+  createAuditEventWithRetry,
+  isRetryableAuditConflictError
+} from './audit-event-write.js';
 import { PrismaService } from './prisma.service.js';
 
 function canonicalJson(value: Record<string, unknown>) {
@@ -54,134 +58,129 @@ export class StudentRegistrationService {
       throw new ConflictException('Exam is not accepting commitment registration');
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      await tx.registrarIdentityLink.upsert({
-        where: {
-          examId_identityCommitment: {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          await tx.registrarIdentityLink.upsert({
+            where: {
+              examId_identityCommitment: {
+                examId: params.examId,
+                identityCommitment: params.identityCommitment
+              }
+            },
+            create: {
+              examId: params.examId,
+              identityCommitment: params.identityCommitment,
+              realUserRefCiphertext: sha256Hex(params.studentId)
+            },
+            update: {
+              realUserRefCiphertext: sha256Hex(params.studentId)
+            }
+          });
+
+          const eligibleCommitment = await tx.eligibleCommitment.upsert({
+            where: {
+              examId_identityCommitment: {
+                examId: params.examId,
+                identityCommitment: params.identityCommitment
+              }
+            },
+            create: {
+              examId: params.examId,
+              identityCommitment: params.identityCommitment,
+              addedByRef: params.studentId,
+              status: EligibleCommitmentStatus.ACTIVE
+            },
+            update: {
+              status: EligibleCommitmentStatus.ACTIVE,
+              addedByRef: params.studentId
+            }
+          });
+
+          const activeCommitments = await tx.eligibleCommitment.findMany({
+            where: {
+              examId: params.examId,
+              status: EligibleCommitmentStatus.ACTIVE
+            },
+            orderBy: [
+              {
+                addedAt: 'asc'
+              },
+              {
+                id: 'asc'
+              }
+            ]
+          });
+
+          const group = new Group(
+            activeCommitments.map((item) => BigInt(item.identityCommitment))
+          );
+          const groupRoot = group.root.toString();
+          const memberIndex = group.indexOf(commitmentAsBigInt);
+          const payload = {
+            groupRoot,
+            identityCommitment: params.identityCommitment,
+            memberIndex
+          };
+          const payloadHash = sha256Hex(canonicalJson(payload));
+          const auditEvent = await createAuditEventWithRetry(tx, {
             examId: params.examId,
-            identityCommitment: params.identityCommitment
+            buildEvent: ({ createdAt, prevEventHash, seq }) => ({
+              actorRole: 'STUDENT',
+              createdAt,
+              eventHash: sha256Hex(
+                canonicalJson({
+                  actorPseudonym: null,
+                  actorRole: 'STUDENT',
+                  createdAt: createdAt.toISOString(),
+                  eventType: 'IdentityCommitmentAdded',
+                  examId: params.examId,
+                  payloadHash,
+                  prevEventHash,
+                  seq
+                })
+              ),
+              eventType: 'IdentityCommitmentAdded',
+              examId: params.examId,
+              payloadHash,
+              prevEventHash,
+              seq
+            })
+          });
+
+          await tx.eligibleCommitment.update({
+            where: {
+              id: eligibleCommitment.id
+            },
+            data: {
+              auditEventId: auditEvent.id
+            }
+          });
+
+          await tx.exam.update({
+            where: {
+              id: params.examId
+            },
+            data: {
+              currentGroupRoot: groupRoot
+            }
+          });
+
+          return {
+            auditEventId: auditEvent.id,
+            groupRoot,
+            groupSnapshotVersion: activeCommitments.length,
+            memberIndex
           }
-        },
-        create: {
-          examId: params.examId,
-          identityCommitment: params.identityCommitment,
-          realUserRefCiphertext: sha256Hex(params.studentId)
-        },
-        update: {
-          realUserRefCiphertext: sha256Hex(params.studentId)
-        }
-      });
-
-      const eligibleCommitment = await tx.eligibleCommitment.upsert({
-        where: {
-          examId_identityCommitment: {
-            examId: params.examId,
-            identityCommitment: params.identityCommitment
+        });
+      } catch (error) {
+        if (isRetryableAuditConflictError(error) && attempt < 4) {
+          continue;
           }
-        },
-        create: {
-          examId: params.examId,
-          identityCommitment: params.identityCommitment,
-          addedByRef: params.studentId,
-          status: EligibleCommitmentStatus.ACTIVE
-        },
-        update: {
-          status: EligibleCommitmentStatus.ACTIVE,
-          addedByRef: params.studentId
-        }
-      });
+        throw error;
+      }
+    }
 
-      const activeCommitments = await tx.eligibleCommitment.findMany({
-        where: {
-          examId: params.examId,
-          status: EligibleCommitmentStatus.ACTIVE
-        },
-        orderBy: [
-          {
-            addedAt: 'asc'
-          },
-          {
-            id: 'asc'
-          }
-        ]
-      });
-
-      const group = new Group(
-        activeCommitments.map((item) => BigInt(item.identityCommitment))
-      );
-      const groupRoot = group.root.toString();
-      const memberIndex = group.indexOf(commitmentAsBigInt);
-      const seq =
-        (await tx.auditEvent.count({
-          where: {
-            examId: params.examId
-          }
-        })) + 1;
-      const previousAuditEvent = await tx.auditEvent.findFirst({
-        where: {
-          examId: params.examId
-        },
-        orderBy: {
-          seq: 'desc'
-        }
-      });
-      const payload = {
-        groupRoot,
-        identityCommitment: params.identityCommitment,
-        memberIndex
-      };
-      const payloadHash = sha256Hex(canonicalJson(payload));
-      const createdAt = new Date();
-      const eventHash = sha256Hex(
-        canonicalJson({
-          actorPseudonym: null,
-          actorRole: 'STUDENT',
-          createdAt: createdAt.toISOString(),
-          eventType: 'IdentityCommitmentAdded',
-          examId: params.examId,
-          payloadHash,
-          prevEventHash: previousAuditEvent?.eventHash ?? null,
-          seq
-        })
-      );
-
-      const auditEvent = await tx.auditEvent.create({
-        data: {
-          examId: params.examId,
-          seq,
-          eventType: 'IdentityCommitmentAdded',
-          actorRole: 'STUDENT',
-          payloadHash,
-          prevEventHash: previousAuditEvent?.eventHash ?? null,
-          eventHash,
-          createdAt
-        }
-      });
-
-      await tx.eligibleCommitment.update({
-        where: {
-          id: eligibleCommitment.id
-        },
-        data: {
-          auditEventId: auditEvent.id
-        }
-      });
-
-      await tx.exam.update({
-        where: {
-          id: params.examId
-        },
-        data: {
-          currentGroupRoot: groupRoot
-        }
-      });
-
-      return {
-        auditEventId: auditEvent.id,
-        groupRoot,
-        groupSnapshotVersion: activeCommitments.length,
-        memberIndex
-      };
-    });
+    throw new ConflictException('AUDIT_APPEND_RETRY_EXHAUSTED');
   }
 }
