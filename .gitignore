@@ -1,0 +1,8 @@
+node_modules
+.next
+dist
+coverage
+.turbo
+.env
+.DS_Store
+audits/
