@@ -10,6 +10,7 @@ import {
   Put
 } from '@nestjs/common';
 import { AdminExamService } from './admin-exam.service.js';
+import { MarkingService } from './marking.service.js';
 
 type CreateExamBody = {
   title?: string;
@@ -38,6 +39,16 @@ type GradingPolicyBody = {
   gradingPolicy?: unknown;
 };
 
+type EnrollMarkerBody = {
+  markerLabel?: string;
+  markerRef?: string | null;
+};
+
+type GenerateAssignmentsBody = {
+  dueAt?: string | null;
+  seed?: string;
+};
+
 function requireAdminId(adminId: string | undefined) {
   if (!adminId?.trim()) {
     throw new BadRequestException('Missing x-admin-id header');
@@ -50,7 +61,9 @@ function requireAdminId(adminId: string | undefined) {
 export class AdminExamController {
   constructor(
     @Inject(AdminExamService)
-    private readonly adminExamService: AdminExamService
+    private readonly adminExamService: AdminExamService,
+    @Inject(MarkingService)
+    private readonly markingService: MarkingService
   ) {}
 
   @Post()
@@ -224,6 +237,42 @@ export class AdminExamController {
     return this.adminExamService.openClaiming({
       adminId: requireAdminId(adminId),
       examId
+    });
+  }
+
+  @Post(':examId/markers')
+  async enrollMarker(
+    @Param('examId') examId: string,
+    @Headers('x-admin-id') adminId: string | undefined,
+    @Body() body: EnrollMarkerBody
+  ) {
+    if (!body.markerLabel?.trim()) {
+      throw new BadRequestException('markerLabel is required');
+    }
+
+    return this.markingService.enrollMarker({
+      adminId: requireAdminId(adminId),
+      examId,
+      markerLabel: body.markerLabel,
+      markerRef: body.markerRef
+    });
+  }
+
+  @Post(':examId/assignments')
+  async generateAssignments(
+    @Param('examId') examId: string,
+    @Headers('x-admin-id') adminId: string | undefined,
+    @Body() body: GenerateAssignmentsBody
+  ) {
+    if (!body.seed?.trim()) {
+      throw new BadRequestException('seed is required');
+    }
+
+    return this.markingService.generateAssignments({
+      adminId: requireAdminId(adminId),
+      dueAt: body.dueAt,
+      examId,
+      seed: body.seed
     });
   }
 }

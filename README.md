@@ -83,6 +83,7 @@ The repository currently includes:
 - Phase 7 objective grading proof generation in the worker
 - Phase 8 finalized anonymous grades and claim flow
 - Phase 9 public auditor console, audit root history, proof artifact explorer, and server-side receipt verification
+- Phase 10 blind marking workflow with subjective submission slicing, deterministic assignment generation, local marker pseudonym signing, adjudication, and subjective grade aggregation
 - an execution-ready implementation plan in [`docs/implementation-plan.md`](docs/implementation-plan.md)
 
 ## Public Routes
@@ -91,6 +92,7 @@ The repository currently includes:
 - `/student/exam` for loading the public exam, restoring encrypted drafts, encrypting answer blobs, generating the proof in a worker, and submitting anonymously
 - `/verify-receipt` for browser-side receipt verification without privileged API access
 - `/auditor` for manifest inspection, audit root history, group root history, proof artifact metadata, and receipt verification against stored server records
+- `/marker` for blinded task review, local pseudonym-key storage, signed mark submission, and adjudication handling
 
 ## Public API Highlights
 
@@ -101,6 +103,9 @@ The repository currently includes:
 - `GET /api/public/exams/:examId/proof-artifacts` for verified proof artifact metadata
 - `GET /api/public/exams/:examId/submissions/:submissionId/finalized-grade` for finalized grade and proof metadata
 - `POST /api/public/verify-receipt` for server-side receipt validation against stored records
+- `POST /api/admin/exams/:examId/markers` to enroll marker pseudonyms and issue local signing keys
+- `POST /api/admin/exams/:examId/assignments` to slice subjective parts and generate deterministic blind marking tasks
+- `GET /api/marker/exams`, `GET /api/marker/exams/:examId/tasks`, `GET /api/marker/tasks/:taskId`, and `POST /api/marker/tasks/:taskId/marks` for the blinded marker workflow
 
 ## Additional Environment Notes
 

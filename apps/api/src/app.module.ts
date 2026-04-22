@@ -5,6 +5,8 @@ import { AuditRootService } from './audit-root.service.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { BlobStorageService } from './blob-storage.service.js';
+import { MarkerController } from './marker.controller.js';
+import { MarkingService } from './marking.service.js';
 import { PublicExamController } from './public-exam.controller.js';
 import { PublicExamService } from './public-exam.service.js';
 import { PublicUploadController } from './public-upload.controller.js';
@@ -26,13 +28,15 @@ import { StudentRegistrationService } from './student-registration.service.js';
     StudentClaimController,
     PublicExamController,
     PublicUploadController,
-    PublicVerifyController
+    PublicVerifyController,
+    MarkerController
   ],
   providers: [
     AdminExamService,
     AuditRootService,
     AppService,
     BlobStorageService,
+    MarkingService,
     PrismaService,
     PublicVerifyService,
     StudentClaimService,

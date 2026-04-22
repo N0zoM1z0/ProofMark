@@ -120,6 +120,9 @@ export default function StudentExamPage() {
   const [examId, setExamId] = useState('demo-exam');
   const [passphrase, setPassphrase] = useState('');
   const [answers, setAnswers] = useState<Record<string, string | null>>({});
+  const [subjectiveAnswers, setSubjectiveAnswers] = useState<
+    Record<string, string>
+  >({});
   const [commitment, setCommitment] = useState<string | null>(null);
   const [exam, setExam] = useState<PublicExamResponse | null>(null);
   const [group, setGroup] = useState<PublicGroupResponse | null>(null);
@@ -154,14 +157,15 @@ export default function StudentExamPage() {
     void (async () => {
       const encryptedDraft = await encryptTextRecord(
         JSON.stringify({
-          answers
+          answers,
+          subjectiveAnswers
         }),
         passphrase
       );
 
       await writeStoredValue<DraftRecord>(draftStorageKey, encryptedDraft);
     })();
-  }, [answers, exam, identityExport, passphrase, receipt]);
+  }, [answers, exam, identityExport, passphrase, receipt, subjectiveAnswers]);
 
   async function restoreLocalState(
     currentExam: PublicExamResponse,
@@ -191,9 +195,11 @@ export default function StudentExamPage() {
       const decryptedDraft = await decryptTextRecord(storedDraft, currentPassphrase);
       const parsedDraft = JSON.parse(decryptedDraft) as {
         answers?: Record<string, string | null>;
+        subjectiveAnswers?: Record<string, string>;
       };
 
       setAnswers(parsedDraft.answers ?? {});
+      setSubjectiveAnswers(parsedDraft.subjectiveAnswers ?? {});
       setStatus('Recovered the last encrypted local draft.');
     } catch {
       setStatus('Draft recovery skipped because the passphrase did not unlock it.');
@@ -294,7 +300,8 @@ export default function StudentExamPage() {
         examId: exam.id,
         examVersion: exam.examVersion,
         questionSet,
-        questionSetHash: exam.questionSetHash
+        questionSetHash: exam.questionSetHash,
+        subjectiveAnswers
       });
       const answerSalt = crypto.randomUUID();
       const answerCommitment = await createAnswerCommitment({
@@ -537,6 +544,41 @@ export default function StudentExamPage() {
               </article>
             ))}
           </div>
+
+          {questionSet.subjectiveQuestions?.length ? (
+            <div className="question-list">
+              {questionSet.subjectiveQuestions.map((question, index) => (
+                <article key={question.id} className="question-card">
+                  <div className="question-header">
+                    <span className="question-index">
+                      {questionSet.questions.length + index + 1}
+                    </span>
+                    <div>
+                      <h3>{question.prompt}</h3>
+                      <p className="lede compact">
+                        Subjective answer. Max score {question.maxScore}. Rubric hash{' '}
+                        {question.rubricHash}
+                      </p>
+                    </div>
+                  </div>
+                  <label className="field">
+                    <span>Blinded response text</span>
+                    <textarea
+                      className="answer-textarea"
+                      value={subjectiveAnswers[question.id] ?? ''}
+                      disabled={Boolean(receipt)}
+                      onChange={(event) =>
+                        setSubjectiveAnswers((currentAnswers) => ({
+                          ...currentAnswers,
+                          [question.id]: event.target.value
+                        }))
+                      }
+                    />
+                  </label>
+                </article>
+              ))}
+            </div>
+          ) : null}
 
           <div className="actions">
             <button

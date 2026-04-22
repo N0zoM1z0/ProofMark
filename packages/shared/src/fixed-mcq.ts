@@ -9,11 +9,19 @@ export type FixedMcqQuestion = {
   choices: FixedMcqChoice[];
 };
 
+export type SubjectiveQuestion = {
+  id: string;
+  prompt: string;
+  rubricHash: string;
+  maxScore: number;
+};
+
 export type FixedMcqQuestionSet = {
   version: 'proofmark-fixed-mcq-v1';
   title: string;
   instructions?: string;
   questions: FixedMcqQuestion[];
+  subjectiveQuestions?: SubjectiveQuestion[];
 };
 
 export type FixedMcqResponse = {
@@ -27,6 +35,12 @@ export type FixedMcqAnswerSheet = {
   examVersion: number;
   questionSetHash: string;
   responses: FixedMcqResponse[];
+  subjectiveResponses?: SubjectiveResponse[];
+};
+
+export type SubjectiveResponse = {
+  questionId: string;
+  responseText: string;
 };
 
 function assertNonEmptyString(value: unknown, fieldName: string) {
@@ -111,6 +125,45 @@ export function normalizeFixedMcqQuestionSet(
       };
     }
   );
+  const subjectiveQuestions =
+    source.subjectiveQuestions === undefined
+      ? undefined
+      : assertArray(
+          source.subjectiveQuestions,
+          'questionSet.subjectiveQuestions'
+        ).map((question, questionIndex) => {
+          const normalizedQuestion = assertObject(
+            question,
+            `questionSet.subjectiveQuestions[${questionIndex}]`
+          );
+          const maxScore = normalizedQuestion.maxScore;
+
+          if (
+            typeof maxScore !== 'number' ||
+            !Number.isFinite(maxScore) ||
+            maxScore <= 0
+          ) {
+            throw new TypeError(
+              `questionSet.subjectiveQuestions[${questionIndex}].maxScore must be a positive number`
+            );
+          }
+
+          return {
+            id: assertNonEmptyString(
+              normalizedQuestion.id,
+              `questionSet.subjectiveQuestions[${questionIndex}].id`
+            ),
+            maxScore,
+            prompt: assertNonEmptyString(
+              normalizedQuestion.prompt,
+              `questionSet.subjectiveQuestions[${questionIndex}].prompt`
+            ),
+            rubricHash: assertNonEmptyString(
+              normalizedQuestion.rubricHash,
+              `questionSet.subjectiveQuestions[${questionIndex}].rubricHash`
+            )
+          };
+        });
 
   if (questions.length === 0) {
     throw new TypeError('questionSet.questions must contain at least one question');
@@ -136,6 +189,15 @@ export function normalizeFixedMcqQuestionSet(
       choiceIds.add(choice.id);
     }
   }
+  const subjectiveIds = new Set<string>();
+
+  for (const subjectiveQuestion of subjectiveQuestions ?? []) {
+    if (questionIds.has(subjectiveQuestion.id) || subjectiveIds.has(subjectiveQuestion.id)) {
+      throw new TypeError(`Duplicate question id: ${subjectiveQuestion.id}`);
+    }
+
+    subjectiveIds.add(subjectiveQuestion.id);
+  }
 
   return {
     instructions:
@@ -143,6 +205,7 @@ export function normalizeFixedMcqQuestionSet(
         ? undefined
         : assertNonEmptyString(source.instructions, 'questionSet.instructions'),
     questions,
+    subjectiveQuestions,
     title: assertNonEmptyString(source.title, 'questionSet.title'),
     version: 'proofmark-fixed-mcq-v1'
   };
@@ -177,16 +240,31 @@ export function createFixedMcqAnswerSheet(params: {
   questionSet: FixedMcqQuestionSet;
   questionSetHash: string;
   answers: Record<string, string | null | undefined>;
+  subjectiveAnswers?: Record<string, string | null | undefined>;
 }): FixedMcqAnswerSheet {
+  const subjectiveResponses =
+    params.questionSet.subjectiveQuestions?.map((question) => ({
+      questionId: question.id,
+      responseText: params.subjectiveAnswers?.[question.id]?.trim() ?? ''
+    })) ?? undefined;
+
   return {
     examId: params.examId,
     examVersion: params.examVersion,
     questionSetHash: params.questionSetHash,
     responses: encodeFixedMcqAnswers(params.questionSet, params.answers),
+    subjectiveResponses:
+      subjectiveResponses && subjectiveResponses.length > 0
+        ? subjectiveResponses
+        : undefined,
     version: 'proofmark-answer-sheet-v1'
   };
 }
 
 export function getFixedMcqQuestionCount(questionSet: FixedMcqQuestionSet) {
   return questionSet.questions.length;
+}
+
+export function getSubjectiveQuestionCount(questionSet: FixedMcqQuestionSet) {
+  return questionSet.subjectiveQuestions?.length ?? 0;
 }

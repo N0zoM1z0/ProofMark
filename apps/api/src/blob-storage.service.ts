@@ -1,5 +1,6 @@
 import {
   CreateBucketCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -9,6 +10,36 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 
 function normalizeHash(value: string) {
   return value.startsWith('sha256:') ? value : `sha256:${value}`;
+}
+
+async function readBodyAsString(body: unknown) {
+  if (!body) {
+    throw new NotFoundException('Encrypted blob body is empty');
+  }
+
+  if (typeof body === 'string') {
+    return body;
+  }
+
+  if (body instanceof Uint8Array) {
+    return Buffer.from(body).toString('utf8');
+  }
+
+  if (typeof (body as { transformToString?: () => Promise<string> }).transformToString === 'function') {
+    return (body as { transformToString: () => Promise<string> }).transformToString();
+  }
+
+  if (typeof (body as AsyncIterable<Uint8Array>)[Symbol.asyncIterator] === 'function') {
+    const chunks: Uint8Array[] = [];
+
+    for await (const chunk of body as AsyncIterable<Uint8Array>) {
+      chunks.push(chunk);
+    }
+
+    return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
+  }
+
+  throw new NotFoundException('Encrypted blob body format is unsupported');
 }
 
 @Injectable()
@@ -98,6 +129,24 @@ export class BlobStorageService {
     if (!storedHash || normalizedHash !== `sha256:${storedHash}`) {
       throw new NotFoundException('Encrypted blob hash does not match uploaded object');
     }
+  }
+
+  async getEncryptedSubmissionBlob(blobUri: string) {
+    await this.ensureBucket();
+    const { bucket, objectKey } = this.parseBlobUri(blobUri);
+
+    if (bucket !== this.bucket) {
+      throw new NotFoundException('Encrypted blob bucket does not match the active store');
+    }
+
+    const result = await this.client.send(
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: objectKey
+      })
+    );
+
+    return readBodyAsString(result.Body);
   }
 
   private async ensureBucket() {

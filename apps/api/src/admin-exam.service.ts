@@ -12,6 +12,7 @@ import {
   SubmissionStatus
 } from '@prisma/client';
 import {
+  normalizeBlindMarkingPolicy,
   normalizeFixedMcqQuestionSet,
   type FixedMcqQuestionSet
 } from '@proofmark/shared';
@@ -221,11 +222,24 @@ function normalizeGradingPolicy(
     throw new BadRequestException('gradingPolicy.pointsPerQuestion must be positive');
   }
 
+  const subjectiveMarking =
+    source.subjectiveMarking === undefined
+      ? undefined
+      : normalizeBlindMarkingPolicy(
+          Object.prototype.toString.call(source.subjectiveMarking) === '[object Object]'
+            ? (source.subjectiveMarking as Partial<{
+                adjudicationDelta: number;
+                markersPerPart: number;
+              }>)
+            : undefined
+        );
+
   return {
     allowPartialCredit: false,
     maxScore: questionSet.questions.length * pointsPerQuestion,
     pointsPerQuestion,
     questionCount: questionSet.questions.length,
+    subjectiveMarking,
     version: 'proofmark-fixed-mcq-policy-v1' as const
   };
 }
@@ -797,8 +811,8 @@ export class AdminExamService {
   async startGrading(params: { examId: string; adminId: string }) {
     const exam = await this.getExamOrThrow(params.examId);
 
-    if (exam.status !== ExamStatus.CLOSED) {
-      throw new ConflictException('Exam must be CLOSED before GRADING can start');
+    if (exam.status !== ExamStatus.CLOSED && exam.status !== ExamStatus.MARKING) {
+      throw new ConflictException('Exam must be CLOSED or MARKING before GRADING can start');
     }
 
     const acceptedSubmissionCount = await this.prisma.submission.count({
@@ -810,6 +824,21 @@ export class AdminExamService {
 
     if (acceptedSubmissionCount === 0) {
       throw new ConflictException('GRADING requires at least one accepted submission');
+    }
+
+    if (exam.status === ExamStatus.MARKING) {
+      const ungradedParts = await this.prisma.submissionPart.count({
+        where: {
+          examId: params.examId,
+          status: {
+            not: 'GRADED'
+          }
+        }
+      });
+
+      if (ungradedParts > 0) {
+        throw new ConflictException('All subjective submission parts must be graded first');
+      }
     }
 
     return this.prisma.$transaction(async (tx) => {

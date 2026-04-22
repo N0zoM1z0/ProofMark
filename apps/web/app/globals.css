@@ -99,6 +99,18 @@ body {
   font: inherit;
 }
 
+.field textarea {
+  min-height: 10rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(31, 26, 22, 0.16);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  color: inherit;
+  font: inherit;
+  line-height: 1.6;
+  resize: vertical;
+}
+
 .field input[type='password'] {
   letter-spacing: 0.04em;
 }
@@ -327,6 +339,10 @@ body {
 
 .choice-row input {
   margin: 0;
+}
+
+.answer-textarea {
+  width: 100%;
 }
 
 @media (max-width: 640px) {

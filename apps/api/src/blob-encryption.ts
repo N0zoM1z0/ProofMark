@@ -1,4 +1,5 @@
 import {
+  createDecipheriv,
   createPrivateKey,
   createPublicKey,
   generateKeyPairSync,
@@ -106,4 +107,59 @@ export function decryptEnvelopeKey(encryptedKeyBase64: string) {
     },
     Buffer.from(encryptedKeyBase64, 'base64')
   );
+}
+
+type EncryptedSubmissionBlob = {
+  algorithm: 'aes-256-gcm+rsa-oaep-sha256';
+  ciphertext: string;
+  encryptedKey: string;
+  iv: string;
+  version: 'proofmark-encrypted-answer-v1';
+};
+
+export function decryptSubmissionBlobPayload(serializedBlob: string) {
+  const encryptedBlob = JSON.parse(serializedBlob) as EncryptedSubmissionBlob;
+
+  if (
+    encryptedBlob.version !== 'proofmark-encrypted-answer-v1' ||
+    encryptedBlob.algorithm !== 'aes-256-gcm+rsa-oaep-sha256'
+  ) {
+    throw new Error('ENCRYPTED_BLOB_VERSION_UNSUPPORTED');
+  }
+
+  const aesKey = decryptEnvelopeKey(encryptedBlob.encryptedKey);
+  const encryptedBytes = Buffer.from(encryptedBlob.ciphertext, 'base64');
+  const tag = encryptedBytes.subarray(encryptedBytes.length - 16);
+  const ciphertext = encryptedBytes.subarray(0, encryptedBytes.length - 16);
+  const decipher = createDecipheriv(
+    'aes-256-gcm',
+    aesKey,
+    Buffer.from(encryptedBlob.iv, 'base64')
+  );
+
+  decipher.setAuthTag(tag);
+
+  const plaintext = Buffer.concat([
+    decipher.update(ciphertext),
+    decipher.final()
+  ]).toString('utf8');
+
+  return JSON.parse(plaintext) as {
+    answerSalt: string;
+    answerSheet: {
+      examId: string;
+      examVersion: number;
+      questionSetHash: string;
+      responses: Array<{
+        questionId: string;
+        selectedChoiceId: string | null;
+      }>;
+      subjectiveResponses?: Array<{
+        questionId: string;
+        responseText: string;
+      }>;
+      version: 'proofmark-answer-sheet-v1';
+    };
+    version: 'proofmark-answer-blob-v1';
+  };
 }

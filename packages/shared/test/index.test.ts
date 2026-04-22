@@ -4,6 +4,10 @@ import {
   canTransitionExamStatus,
   createFixedMcqAnswerSheet,
   createVersionBanner,
+  evaluateBlindMarkingScores,
+  generateBlindMarkingAssignments,
+  getSubjectiveQuestionCount,
+  normalizeBlindMarkingPolicy,
   normalizeFixedMcqQuestionSet,
   packageName
 } from '../src/index.js';
@@ -92,6 +96,14 @@ describe('fixed MCQ helpers', () => {
           prompt: 'Second'
         }
       ],
+      subjectiveQuestions: [
+        {
+          id: 'essay-1',
+          maxScore: 10,
+          prompt: 'Explain why blind marking reduces bias.',
+          rubricHash: 'sha256:rubric'
+        }
+      ],
       title: 'Sample'
     });
 
@@ -103,7 +115,10 @@ describe('fixed MCQ helpers', () => {
         examId: 'exam-1',
         examVersion: 2,
         questionSet,
-        questionSetHash: 'sha256:test'
+        questionSetHash: 'sha256:test',
+        subjectiveAnswers: {
+          'essay-1': 'Anonymous marking keeps the candidate hidden from the marker.'
+        }
       })
     ).toEqual({
       examId: 'exam-1',
@@ -119,7 +134,85 @@ describe('fixed MCQ helpers', () => {
           selectedChoiceId: 'false'
         }
       ],
+      subjectiveResponses: [
+        {
+          questionId: 'essay-1',
+          responseText: 'Anonymous marking keeps the candidate hidden from the marker.'
+        }
+      ],
       version: 'proofmark-answer-sheet-v1'
+    });
+    expect(getSubjectiveQuestionCount(questionSet)).toBe(1);
+  });
+});
+
+describe('blind marking helpers', () => {
+  it('reproduces assignments and escalates adjudication when scores diverge', async () => {
+    const policy = normalizeBlindMarkingPolicy({
+      adjudicationDelta: 2,
+      markersPerPart: 2
+    });
+    const firstRun = await generateBlindMarkingAssignments({
+      markerIds: ['marker-a', 'marker-b', 'marker-c'],
+      policy,
+      seed: 'phase10-seed',
+      submissionPartIds: ['part-1', 'part-2']
+    });
+    const secondRun = await generateBlindMarkingAssignments({
+      markerIds: ['marker-a', 'marker-b', 'marker-c'],
+      policy,
+      seed: 'phase10-seed',
+      submissionPartIds: ['part-1', 'part-2']
+    });
+
+    expect(firstRun).toEqual(secondRun);
+    expect(
+      evaluateBlindMarkingScores({
+        marks: [
+          {
+            markerId: 'marker-a',
+            score: 8
+          },
+          {
+            markerId: 'marker-b',
+            score: 3
+          }
+        ],
+        maxScore: 10,
+        policy
+      })
+    ).toEqual({
+      adjudicationRequired: true,
+      averageScore: null,
+      delta: 5,
+      finalized: false,
+      shouldCreateAdjudication: true
+    });
+    expect(
+      evaluateBlindMarkingScores({
+        marks: [
+          {
+            markerId: 'marker-a',
+            score: 8
+          },
+          {
+            markerId: 'marker-b',
+            score: 3
+          },
+          {
+            markerId: 'marker-c',
+            score: 7
+          }
+        ],
+        maxScore: 10,
+        policy
+      })
+    ).toEqual({
+      adjudicationRequired: true,
+      averageScore: 6,
+      delta: 5,
+      finalized: true,
+      shouldCreateAdjudication: false
     });
   });
 });

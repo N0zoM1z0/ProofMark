@@ -51,6 +51,23 @@ enum ClaimStatus {
   REVOKED
 }
 
+enum SubmissionPartStatus {
+  READY
+  ADJUDICATION_REQUIRED
+  GRADED
+}
+
+enum MarkerStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum GradingTaskStatus {
+  ASSIGNED
+  SUBMITTED
+  RETURNED
+}
+
 model Exam {
   id                   String                @id @default(uuid())
   title                String
@@ -73,6 +90,10 @@ model Exam {
   eligibleCommitments  EligibleCommitment[]
   registrarLinks       RegistrarIdentityLink[]
   submissions          Submission[]
+  submissionParts      SubmissionPart[]
+  markers              Marker[]
+  gradingTasks         GradingTask[]
+  marks                Mark[]
   proofArtifacts       ProofArtifact[]
   auditEvents          AuditEvent[]
   auditRoots           AuditRoot[]
@@ -145,10 +166,97 @@ model Submission {
   grades            Grade[]
   gradeClaims       GradeClaim[]
   proofArtifacts    ProofArtifact[]
+  submissionParts   SubmissionPart[]
 
   @@unique([examId, nullifierHash])
   @@unique([examId, submissionIndex])
   @@index([examId, createdAt])
+}
+
+model SubmissionPart {
+  id             String               @id @default(uuid())
+  examId         String
+  submissionId   String
+  questionId     String
+  partIndex      Int
+  prompt         String
+  responseText   String
+  rubricHash     String
+  maxScore       Decimal              @db.Decimal(10, 2)
+  partCommitment String
+  status         SubmissionPartStatus @default(READY)
+  score          Decimal?             @db.Decimal(10, 2)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  exam           Exam                 @relation(fields: [examId], references: [id], onDelete: Cascade)
+  submission     Submission           @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  gradingTasks   GradingTask[]
+  marks          Mark[]
+
+  @@unique([submissionId, questionId])
+  @@index([examId, createdAt])
+  @@index([submissionId, createdAt])
+}
+
+model Marker {
+  id                   String       @id @default(uuid())
+  examId               String
+  markerRef            String?
+  pseudonymLabel       String
+  pseudonymPublicKey   String
+  pseudonymPrivateKey  String
+  status               MarkerStatus @default(ACTIVE)
+  addedAt              DateTime     @default(now())
+  exam                 Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  gradingTasks         GradingTask[]
+  marks                Mark[]
+
+  @@unique([examId, pseudonymLabel])
+  @@index([examId, addedAt])
+}
+
+model GradingTask {
+  id                   String            @id @default(uuid())
+  examId               String
+  submissionPartId     String
+  markerId             String
+  assignmentOrdinal    Int
+  assignmentCommitment String
+  status               GradingTaskStatus @default(ASSIGNED)
+  dueAt                DateTime?
+  createdAt            DateTime          @default(now())
+  auditEventId         String?
+  exam                 Exam              @relation(fields: [examId], references: [id], onDelete: Cascade)
+  submissionPart       SubmissionPart    @relation(fields: [submissionPartId], references: [id], onDelete: Cascade)
+  marker               Marker            @relation(fields: [markerId], references: [id], onDelete: Cascade)
+  marks                Mark[]
+
+  @@unique([submissionPartId, markerId])
+  @@index([examId, createdAt])
+  @@index([markerId, createdAt])
+}
+
+model Mark {
+  id               String    @id @default(uuid())
+  examId           String
+  gradingTaskId    String
+  submissionPartId String
+  markerId         String
+  score            Decimal   @db.Decimal(10, 2)
+  maxScore         Decimal   @db.Decimal(10, 2)
+  rubricHash       String
+  commentsHash     String
+  markerSignature  String
+  createdAt        DateTime  @default(now())
+  auditEventId     String?
+  exam             Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  gradingTask      GradingTask @relation(fields: [gradingTaskId], references: [id], onDelete: Cascade)
+  submissionPart   SubmissionPart @relation(fields: [submissionPartId], references: [id], onDelete: Cascade)
+  marker           Marker    @relation(fields: [markerId], references: [id], onDelete: Cascade)
+
+  @@unique([gradingTaskId])
+  @@index([examId, createdAt])
+  @@index([submissionPartId, createdAt])
 }
 
 model ProofArtifact {

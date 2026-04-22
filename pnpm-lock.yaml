@@ -66,6 +66,9 @@ importers:
       '@prisma/client':
         specifier: ^7.7.0
         version: 7.7.0(prisma@7.7.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(typescript@6.0.3))(typescript@6.0.3)
+      '@proofmark/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
       '@proofmark/shared':
         specifier: workspace:*
         version: link:../../packages/shared

@@ -50,6 +50,11 @@ export default function HomePage() {
             <strong>Auditor Console</strong>
             <p>Inspect manifests, audit roots, proof metadata, and stored receipts.</p>
           </Link>
+          <Link href="/marker" className="nav-tile">
+            <span className="eyebrow">Phase 10</span>
+            <strong>Marker Console</strong>
+            <p>Load blinded tasks, sign marks locally, and submit adjudicable scores.</p>
+          </Link>
         </div>
       </section>
     </main>

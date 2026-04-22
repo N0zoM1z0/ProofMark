@@ -4,12 +4,12 @@
   "type": "module",
   "version": "0.1.0",
   "scripts": {
-    "prebuild": "corepack pnpm --filter @proofmark/shared build",
+    "prebuild": "corepack pnpm --filter @proofmark/shared build && corepack pnpm --filter @proofmark/crypto build",
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "lint": "eslint src --ext .ts",
-    "pretest": "corepack pnpm --filter @proofmark/shared build",
+    "pretest": "corepack pnpm --filter @proofmark/shared build && corepack pnpm --filter @proofmark/crypto build",
     "test": "vitest run"
   },
   "dependencies": {
@@ -19,6 +19,7 @@
     "@nestjs/platform-express": "^11.1.19",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
+    "@proofmark/crypto": "workspace:*",
     "@proofmark/shared": "workspace:*",
     "@semaphore-protocol/group": "^4.14.2",
     "@semaphore-protocol/proof": "^4.14.2",
