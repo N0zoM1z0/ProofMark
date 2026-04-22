@@ -34,6 +34,7 @@ export interface SubmissionInput {
   encryptedBlobHash: string;
   encryptedBlobUri: string;
   examId: string;
+  examVersion: number;
   groupRoot: string;
   message: string;
   nullifierHash: string;
@@ -54,6 +55,17 @@ export class SubmissionService {
     const exam = await this.prisma.exam.findUnique({
       where: {
         id: input.examId
+      },
+      include: {
+        versions: {
+          select: {
+            version: true
+          },
+          orderBy: {
+            version: 'desc'
+          },
+          take: 1
+        }
       }
     });
 
@@ -73,7 +85,13 @@ export class SubmissionService {
       throw new BadRequestException('QUESTION_SET_MISMATCH');
     }
 
-    const expectedScope = computeSubmitScope(exam.id);
+    const currentExamVersion = exam.versions[0]?.version ?? 1;
+
+    if (input.examVersion !== currentExamVersion) {
+      throw new BadRequestException('EXAM_VERSION_MISMATCH');
+    }
+
+    const expectedScope = computeSubmitScope(exam.id, currentExamVersion);
 
     if (input.scope !== expectedScope || input.proof.scope !== expectedScope) {
       throw new BadRequestException('SCOPE_MISMATCH');
@@ -83,6 +101,7 @@ export class SubmissionService {
       answerCommitment: input.answerCommitment,
       encryptedBlobHash: input.encryptedBlobHash,
       examId: exam.id,
+      examVersion: currentExamVersion,
       questionSetHash: exam.questionSetHash
     });
 

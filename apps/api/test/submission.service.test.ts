@@ -13,6 +13,9 @@ type ExamRecord = {
   status: ExamStatus;
   currentGroupRoot: string;
   questionSetHash: string;
+  versions: Array<{
+    version: number;
+  }>;
 };
 
 type SubmissionRecord = {
@@ -145,7 +148,8 @@ describe('SubmissionService', () => {
       currentGroupRoot: '999',
       id: 'exam-1',
       questionSetHash: 'sha256:questions',
-      status: ExamStatus.OPEN
+      status: ExamStatus.OPEN,
+      versions: [{ version: 1 }]
     };
   });
 
@@ -156,14 +160,16 @@ describe('SubmissionService', () => {
       answerCommitment: '0xaaa',
       encryptedBlobHash: 'sha256:blob',
       examId: exam.id,
+      examVersion: 1,
       questionSetHash: exam.questionSetHash
     });
-    const scope = computeSubmitScope(exam.id);
+    const scope = computeSubmitScope(exam.id, 1);
     const result = await service.createSubmission({
       answerCommitment: '0xaaa',
       encryptedBlobHash: 'sha256:blob',
       encryptedBlobUri: 's3://proofmark/submission-1',
       examId: exam.id,
+      examVersion: 1,
       groupRoot: exam.currentGroupRoot,
       message,
       nullifierHash: 'nullifier-1',
@@ -186,7 +192,7 @@ describe('SubmissionService', () => {
   it('rejects an invalid message binding', async () => {
     const { prisma } = createPrismaMock(exam);
     const service = new SubmissionService(prisma as never);
-    const scope = computeSubmitScope(exam.id);
+    const scope = computeSubmitScope(exam.id, 1);
 
     await expect(
       service.createSubmission({
@@ -194,6 +200,7 @@ describe('SubmissionService', () => {
         encryptedBlobHash: 'sha256:blob',
         encryptedBlobUri: 's3://proofmark/submission-1',
         examId: exam.id,
+        examVersion: 1,
         groupRoot: exam.currentGroupRoot,
         message: 'bad-message',
         nullifierHash: 'nullifier-1',
@@ -216,9 +223,10 @@ describe('SubmissionService', () => {
       answerCommitment: '0xaaa',
       encryptedBlobHash: 'sha256:blob',
       examId: exam.id,
+      examVersion: 1,
       questionSetHash: exam.questionSetHash
     });
-    const scope = computeSubmitScope(exam.id);
+    const scope = computeSubmitScope(exam.id, 1);
 
     await expect(
       service.createSubmission({
@@ -226,6 +234,7 @@ describe('SubmissionService', () => {
         encryptedBlobHash: 'sha256:blob',
         encryptedBlobUri: 's3://proofmark/submission-1',
         examId: exam.id,
+        examVersion: 1,
         groupRoot: 'different-root',
         message,
         nullifierHash: 'nullifier-1',
@@ -245,6 +254,7 @@ describe('SubmissionService', () => {
       encryptedBlobHash: 'sha256:blob',
       encryptedBlobUri: 's3://proofmark/submission-1',
       examId: exam.id,
+      examVersion: 1,
       groupRoot: exam.currentGroupRoot,
       message,
       nullifierHash: 'nullifier-1',
@@ -264,11 +274,13 @@ describe('SubmissionService', () => {
         encryptedBlobHash: 'sha256:blob-2',
         encryptedBlobUri: 's3://proofmark/submission-2',
         examId: exam.id,
+        examVersion: 1,
         groupRoot: exam.currentGroupRoot,
         message: computeSubmissionMessage({
           answerCommitment: '0xbbb',
           encryptedBlobHash: 'sha256:blob-2',
           examId: exam.id,
+          examVersion: 1,
           questionSetHash: exam.questionSetHash
         }),
         nullifierHash: 'nullifier-1',
@@ -278,6 +290,7 @@ describe('SubmissionService', () => {
             answerCommitment: '0xbbb',
             encryptedBlobHash: 'sha256:blob-2',
             examId: exam.id,
+            examVersion: 1,
             questionSetHash: exam.questionSetHash
           }),
           nullifierHash: 'nullifier-1',

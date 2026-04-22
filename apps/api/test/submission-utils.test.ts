@@ -11,12 +11,14 @@ describe('submission helpers', () => {
       answerCommitment: '0xaaa',
       encryptedBlobHash: 'sha256:blob',
       examId: 'exam-1',
+      examVersion: 1,
       questionSetHash: 'sha256:questions'
     });
     const right = computeSubmissionMessage({
       answerCommitment: '0xaaa',
       encryptedBlobHash: 'sha256:blob',
       examId: 'exam-1',
+      examVersion: 1,
       questionSetHash: 'sha256:questions'
     });
 
@@ -26,6 +28,7 @@ describe('submission helpers', () => {
         answerCommitment: '0xbbb',
         encryptedBlobHash: 'sha256:blob',
         examId: 'exam-1',
+        examVersion: 1,
         questionSetHash: 'sha256:questions'
       })
     ).not.toBe(left);

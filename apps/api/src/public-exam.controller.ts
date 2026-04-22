@@ -13,6 +13,7 @@ type SubmissionBody = {
   answerCommitment?: string;
   encryptedBlobHash?: string;
   encryptedBlobUri?: string;
+  examVersion?: number;
   groupRoot?: string;
   message?: string;
   nullifierHash?: string;
@@ -33,6 +34,11 @@ export class PublicExamController {
     return this.publicExamService.getPublicExam(examId);
   }
 
+  @Get(':examId/manifest')
+  async getManifest(@Param('examId') examId: string) {
+    return this.publicExamService.getPublicManifest(examId);
+  }
+
   @Post(':examId/submissions')
   async submitAnonymousExam(
     @Param('examId') examId: string,
@@ -42,6 +48,7 @@ export class PublicExamController {
       !body.answerCommitment ||
       !body.encryptedBlobHash ||
       !body.encryptedBlobUri ||
+      body.examVersion === undefined ||
       !body.groupRoot ||
       !body.message ||
       !body.nullifierHash ||
@@ -57,6 +64,7 @@ export class PublicExamController {
       encryptedBlobHash: body.encryptedBlobHash,
       encryptedBlobUri: body.encryptedBlobUri,
       examId,
+      examVersion: body.examVersion,
       groupRoot: body.groupRoot,
       message: body.message,
       nullifierHash: body.nullifierHash,

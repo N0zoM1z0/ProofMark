@@ -50,11 +50,7 @@ export class StudentRegistrationService {
       throw new NotFoundException('Exam not found');
     }
 
-    if (
-      exam.status !== ExamStatus.REGISTRATION &&
-      exam.status !== ExamStatus.PUBLISHED &&
-      exam.status !== ExamStatus.OPEN
-    ) {
+    if (exam.status !== ExamStatus.REGISTRATION) {
       throw new ConflictException('Exam is not accepting commitment registration');
     }
 

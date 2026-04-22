@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { AdminExamController } from './admin-exam.controller.js';
+import { AdminExamService } from './admin-exam.service.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { PublicExamController } from './public-exam.controller.js';
@@ -11,10 +13,12 @@ import { StudentRegistrationService } from './student-registration.service.js';
 @Module({
   controllers: [
     AppController,
+    AdminExamController,
     StudentRegistrationController,
     PublicExamController
   ],
   providers: [
+    AdminExamService,
     AppService,
     PrismaService,
     StudentRegistrationService,

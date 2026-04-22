@@ -94,6 +94,7 @@ export function decimalHash(value: unknown) {
 
 export function computeSubmissionMessage(params: {
   examId: string;
+  examVersion: number;
   questionSetHash: string;
   answerCommitment: string;
   encryptedBlobHash: string;
@@ -102,6 +103,7 @@ export function computeSubmissionMessage(params: {
     answerCommitment: params.answerCommitment,
     encryptedBlobHash: params.encryptedBlobHash,
     examId: params.examId,
+    examVersion: params.examVersion,
     questionSetHash: params.questionSetHash
   });
 }
