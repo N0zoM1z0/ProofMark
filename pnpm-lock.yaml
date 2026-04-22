@@ -66,6 +66,9 @@ importers:
       '@semaphore-protocol/group':
         specifier: ^4.14.2
         version: 4.14.2
+      '@semaphore-protocol/proof':
+        specifier: ^4.14.2
+        version: 4.14.2(@semaphore-protocol/group@4.14.2)(@semaphore-protocol/identity@4.14.2)(@types/snarkjs@0.7.9)(commander@12.1.0)
       pg:
         specifier: ^8.20.0
         version: 8.20.0
@@ -3414,7 +3417,7 @@ snapshots:
 
   '@semaphore-protocol/utils@4.14.2':
     dependencies:
-      ethers: 6.13.4
+      ethers: 6.13.5
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
