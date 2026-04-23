@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException
 } from '@nestjs/common';
@@ -29,7 +30,7 @@ function sha256Hex(value: string) {
 
 @Injectable()
 export class StudentRegistrationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async registerCommitment(params: {
     examId: string;

@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   Headers,
+  Inject,
   Param,
   Post
 } from '@nestjs/common';
@@ -25,7 +26,7 @@ function requireMarkerId(markerId: string | undefined) {
 
 @Controller('api/marker')
 export class MarkerController {
-  constructor(private readonly markingService: MarkingService) {}
+  constructor(@Inject(MarkingService) private readonly markingService: MarkingService) {}
 
   @Get('exams')
   async listMarkerExams(@Headers('x-marker-id') markerId: string | undefined) {

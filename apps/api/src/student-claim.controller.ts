@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Headers,
+  Inject,
   Param,
   Post
 } from '@nestjs/common';
@@ -27,7 +28,10 @@ function requireStudentId(studentId: string | undefined) {
 
 @Controller('api/student/exams')
 export class StudentClaimController {
-  constructor(private readonly studentClaimService: StudentClaimService) {}
+  constructor(
+    @Inject(StudentClaimService)
+    private readonly studentClaimService: StudentClaimService
+  ) {}
 
   @Post(':examId/claims')
   async claimGrade(

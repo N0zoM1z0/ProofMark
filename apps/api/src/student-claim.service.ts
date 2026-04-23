@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException
 } from '@nestjs/common';
@@ -20,7 +21,7 @@ function canonicalStudentHash(studentId: string) {
 
 @Injectable()
 export class StudentClaimService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async claimGrade(params: {
     examId: string;

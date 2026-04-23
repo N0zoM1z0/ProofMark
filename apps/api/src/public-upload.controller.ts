@@ -1,9 +1,17 @@
-import { BadRequestException, Body, Controller, Param, Put } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Inject,
+  Param,
+  Put
+} from '@nestjs/common';
 import { SubmissionUploadService } from './submission-upload.service.js';
 
 @Controller('api/public/uploads')
 export class PublicUploadController {
   constructor(
+    @Inject(SubmissionUploadService)
     private readonly submissionUploadService: SubmissionUploadService
   ) {}
 

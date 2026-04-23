@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException
 } from '@nestjs/common';
@@ -63,7 +64,8 @@ function decodeToken(token: string): UploadTokenPayload {
 @Injectable()
 export class SubmissionUploadService {
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(BlobStorageService)
     private readonly blobStorage: BlobStorageService
   ) {}
 

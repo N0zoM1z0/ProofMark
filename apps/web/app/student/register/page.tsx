@@ -204,36 +204,42 @@ export default function StudentRegisterPage() {
       return;
     }
 
-    const response = await fetch(
-      `${apiBaseUrl}/api/student/exams/${examId}/register-commitment`,
-      {
-        body: JSON.stringify({
-          identityCommitment: storedRecord.commitment
-        }),
-        headers: {
-          'content-type': 'application/json',
-          'x-student-id': studentId
-        },
-        method: 'POST'
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/api/student/exams/${examId}/register-commitment`,
+        {
+          body: JSON.stringify({
+            identityCommitment: storedRecord.commitment
+          }),
+          headers: {
+            'content-type': 'application/json',
+            'x-student-id': studentId
+          },
+          method: 'POST'
+        }
+      );
+
+      if (!response.ok) {
+        const errorMessage = await response.text();
+        setStatus(`Registration failed: ${errorMessage}`);
+        return;
       }
-    );
 
-    if (!response.ok) {
-      const errorMessage = await response.text();
-      setStatus(`Registration failed: ${errorMessage}`);
-      return;
+      const result = (await response.json()) as {
+        groupRoot: string;
+        groupSnapshotVersion: number;
+        memberIndex: number;
+      };
+
+      setCommitment(storedRecord.commitment);
+      setStatus(
+        `Commitment registered. Group root: ${result.groupRoot}, member index: ${result.memberIndex}, version: ${result.groupSnapshotVersion}.`
+      );
+    } catch (error) {
+      setStatus(
+        `Registration failed: ${error instanceof Error ? error.message : 'Unknown network error'}`
+      );
     }
-
-    const result = (await response.json()) as {
-      groupRoot: string;
-      groupSnapshotVersion: number;
-      memberIndex: number;
-    };
-
-    setCommitment(storedRecord.commitment);
-    setStatus(
-      `Commitment registered. Group root: ${result.groupRoot}, member index: ${result.memberIndex}, version: ${result.groupSnapshotVersion}.`
-    );
   }
 
   return (

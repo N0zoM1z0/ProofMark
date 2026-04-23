@@ -17,11 +17,12 @@ export default defineConfig({
             command: 'corepack pnpm --filter @proofmark/api dev',
             env: {
               ...process.env,
-              PORT: apiBaseUrl.split(':').at(-1) ?? '3001'
+              PORT: apiBaseUrl.split(':').at(-1) ?? '3001',
+              WEB_ORIGIN: baseUrl
             },
             reuseExistingServer: true,
             timeout: 120_000,
-            url: `${apiBaseUrl}/api/health`
+            url: `${apiBaseUrl}/health`
           },
           {
             command: 'corepack pnpm --filter @proofmark/web dev -- --hostname 127.0.0.1 --port 3000',

@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Inject,
   Param,
   Post
 } from '@nestjs/common';
@@ -31,8 +32,11 @@ type PresignUploadBody = {
 @Controller('api/public/exams')
 export class PublicExamController {
   constructor(
+    @Inject(PublicExamService)
     private readonly publicExamService: PublicExamService,
+    @Inject(SubmissionService)
     private readonly submissionService: SubmissionService,
+    @Inject(SubmissionUploadService)
     private readonly submissionUploadService: SubmissionUploadService
   ) {}
 

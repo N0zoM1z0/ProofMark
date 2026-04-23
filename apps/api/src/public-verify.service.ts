@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Inject,
   Injectable
 } from '@nestjs/common';
 import { PrismaService } from './prisma.service.js';
@@ -81,7 +82,7 @@ function coerceReceiptEnvelope(value: unknown): SubmissionReceiptEnvelope {
 
 @Injectable()
 export class PublicVerifyService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async verifyReceipt(input: unknown) {
     const receipt = coerceReceiptEnvelope(input);

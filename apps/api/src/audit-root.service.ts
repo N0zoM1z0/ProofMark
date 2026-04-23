@@ -1,4 +1,5 @@
 import {
+  Inject,
   Injectable,
   NotFoundException
 } from '@nestjs/common';
@@ -9,7 +10,7 @@ import { calculateMerkleRoot } from './submission-utils.js';
 
 @Injectable()
 export class AuditRootService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async listAuditRoots(examId: string) {
     const exam = await this.prisma.exam.findUnique({

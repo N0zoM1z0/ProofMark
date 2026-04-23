@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Headers,
+  Inject,
   Param,
   Post
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ type RegisterCommitmentBody = {
 @Controller('api/student/exams')
 export class StudentRegistrationController {
   constructor(
+    @Inject(StudentRegistrationService)
     private readonly studentRegistrationService: StudentRegistrationService
   ) {}
 

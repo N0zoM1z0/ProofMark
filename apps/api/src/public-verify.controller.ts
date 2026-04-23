@@ -1,13 +1,17 @@
 import {
   Body,
   Controller,
+  Inject,
   Post
 } from '@nestjs/common';
 import { PublicVerifyService } from './public-verify.service.js';
 
 @Controller('api/public')
 export class PublicVerifyController {
-  constructor(private readonly publicVerifyService: PublicVerifyService) {}
+  constructor(
+    @Inject(PublicVerifyService)
+    private readonly publicVerifyService: PublicVerifyService
+  ) {}
 
   @Post('verify-receipt')
   async verifyReceipt(@Body() body: unknown) {

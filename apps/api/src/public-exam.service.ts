@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException
+} from '@nestjs/common';
 import {
   EligibleCommitmentStatus,
   ExamStatus,
@@ -18,7 +23,8 @@ import { computeSubmitScope } from './submission-utils.js';
 @Injectable()
 export class PublicExamService {
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AuditRootService)
     private readonly auditRootService: AuditRootService
   ) {}
 

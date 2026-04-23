@@ -575,7 +575,12 @@ export default function AdminPage() {
           method: 'PATCH'
         });
       } else {
-        const createdExam = await fetchAdminJson<{ id: string }>(
+        const createdExam = await fetchAdminJson<{
+          auditEventId: string;
+          exam: {
+            id: string;
+          };
+        }>(
           '/api/admin/exams',
           {
             body: JSON.stringify({
@@ -588,7 +593,7 @@ export default function AdminPage() {
           }
         );
 
-        examId = createdExam.id;
+        examId = createdExam.exam.id;
       }
 
       const salt = answerKeySalt || generateHexSalt();

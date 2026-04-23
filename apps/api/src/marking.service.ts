@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException
 } from '@nestjs/common';
@@ -152,7 +153,8 @@ async function appendAuditEvent(
 @Injectable()
 export class MarkingService {
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(BlobStorageService)
     private readonly blobStorage: BlobStorageService
   ) {}
 
