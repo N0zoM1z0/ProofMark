@@ -68,6 +68,11 @@ enum GradingTaskStatus {
   RETURNED
 }
 
+enum QuestionBankEntryType {
+  MCQ
+  SUBJECTIVE
+}
+
 model Exam {
   id                   String                @id @default(uuid())
   title                String
@@ -99,6 +104,21 @@ model Exam {
   auditRoots           AuditRoot[]
   grades               Grade[]
   gradeClaims          GradeClaim[]
+}
+
+model ExamTemplate {
+  id               String   @id @default(uuid())
+  title            String
+  description      String?
+  courseId         String?
+  questionSetData  Json
+  questionSetHash  String
+  answerKeyData    Json
+  gradingPolicyData Json
+  gradingPolicyHash String
+  createdByRef     String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model ExamVersion {
@@ -257,6 +277,21 @@ model Mark {
   @@unique([gradingTaskId])
   @@index([examId, createdAt])
   @@index([submissionPartId, createdAt])
+}
+
+model QuestionBankEntry {
+  id             String                @id @default(uuid())
+  title          String
+  questionType   QuestionBankEntryType
+  questionData   Json
+  answerData     Json?
+  tags           Json?
+  questionHash   String
+  createdByRef   String
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([questionType, createdAt])
 }
 
 model ProofArtifact {

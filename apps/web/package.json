@@ -7,6 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "prelint": "corepack pnpm --filter @proofmark/shared build",
     "lint": "eslint .",
     "pretest": "corepack pnpm --filter @proofmark/shared build && corepack pnpm --filter @proofmark/zk-semaphore build",
     "test": "vitest run --passWithNoTests"

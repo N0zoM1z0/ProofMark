@@ -99,6 +99,15 @@ body {
   font: inherit;
 }
 
+.field select {
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(31, 26, 22, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  color: inherit;
+  font: inherit;
+}
+
 .field textarea {
   min-height: 10rem;
   padding: 0.9rem 1rem;
@@ -282,6 +291,10 @@ body {
   background: rgba(255, 255, 255, 0.56);
 }
 
+.question-card.admin-card {
+  gap: 1rem;
+}
+
 .question-header {
   display: flex;
   gap: 0.9rem;
@@ -343,6 +356,100 @@ body {
 
 .answer-textarea {
   width: 100%;
+}
+
+.stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.stack.tight {
+  gap: 0.65rem;
+}
+
+.mini-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(180, 81, 31, 0.12);
+  color: var(--accent);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.pill.neutral {
+  background: rgba(31, 26, 22, 0.08);
+  color: rgba(31, 26, 22, 0.84);
+}
+
+.section-divider {
+  margin-top: 0.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(31, 26, 22, 0.08);
+}
+
+.library-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.library-card {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(31, 26, 22, 0.08);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.library-card h3,
+.library-card h4,
+.library-card p {
+  margin: 0;
+}
+
+.library-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.inline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  color: rgba(31, 26, 22, 0.72);
+  font-size: 0.92rem;
+}
+
+.helper-copy {
+  margin: 0;
+  color: rgba(31, 26, 22, 0.72);
+  line-height: 1.6;
+}
+
+.file-input {
+  padding: 0.75rem 0.9rem;
+  border: 1px dashed rgba(31, 26, 22, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  color: inherit;
+  font: inherit;
 }
 
 @media (max-width: 640px) {

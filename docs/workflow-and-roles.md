@@ -20,6 +20,8 @@ The system is designed so that no single ordinary workflow view sees more data t
 
 Admin is responsible for:
 
+- importing or authoring the exam through `/admin`
+- saving reusable templates and question-bank entries
 - creating the exam shell
 - setting the question set
 - setting the answer-key commitment
@@ -31,6 +33,9 @@ Admin is responsible for:
 
 Admin can see:
 
+- draft authoring bundles
+- reusable template metadata
+- question-bank metadata
 - exam configuration
 - current exam state
 - group roots
@@ -179,8 +184,11 @@ Operational meaning:
 
 ## Step A. Admin authors the exam
 
-Admin uses the admin API to:
+Admin uses `/admin` or the admin API to:
 
+- preview JSON / Markdown / CSV imports
+- save or load reusable templates
+- pull questions from the question bank
 - create the exam shell
 - upload the question set
 - set the answer-key commitment
@@ -193,6 +201,11 @@ Result:
 - exam configuration is fixed
 - current version is committed
 - students may now register commitments
+
+Practical note:
+
+- teachers usually work through `/admin`
+- the low-level admin API remains useful for scripted setup and CI smoke flows
 
 ## Step B. Student registration
 

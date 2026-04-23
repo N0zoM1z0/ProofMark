@@ -11,7 +11,9 @@ export default function HomePage() {
     <main className="shell">
       <section className="hero">
         <p className="eyebrow">ProofMark MVP</p>
-        <h1>Verifiable assessment infrastructure without sacrificing privacy.</h1>
+        <h1>
+          Verifiable assessment infrastructure without sacrificing privacy.
+        </h1>
         <p className="lede">
           The repository is scaffolded for a ZK-enabled exam workflow built on
           Next.js, NestJS, Prisma, and proof workers.
@@ -30,6 +32,14 @@ export default function HomePage() {
       <section className="card">
         <h2>Live Flows</h2>
         <div className="link-grid">
+          <Link href="/admin" className="nav-tile">
+            <span className="eyebrow">Authoring</span>
+            <strong>Admin Workspace</strong>
+            <p>
+              Import question sheets, save templates, reuse bank prompts, and
+              build exams.
+            </p>
+          </Link>
           <Link href="/student/register" className="nav-tile">
             <span className="eyebrow">Phase 3</span>
             <strong>Register Identity</strong>
@@ -43,7 +53,10 @@ export default function HomePage() {
           <Link href="/student/claim" className="nav-tile">
             <span className="eyebrow">Phase 8</span>
             <strong>Claim Grade</strong>
-            <p>Use the same local identity and receipt to reclaim the finalized result.</p>
+            <p>
+              Use the same local identity and receipt to reclaim the finalized
+              result.
+            </p>
           </Link>
           <Link href="/verify-receipt" className="nav-tile">
             <span className="eyebrow">Audit</span>
@@ -53,12 +66,18 @@ export default function HomePage() {
           <Link href="/auditor" className="nav-tile">
             <span className="eyebrow">Phase 9</span>
             <strong>Auditor Console</strong>
-            <p>Inspect manifests, audit roots, proof metadata, and stored receipts.</p>
+            <p>
+              Inspect manifests, audit roots, proof metadata, and stored
+              receipts.
+            </p>
           </Link>
           <Link href="/marker" className="nav-tile">
             <span className="eyebrow">Phase 10</span>
             <strong>Marker Console</strong>
-            <p>Load blinded tasks, sign marks locally, and submit adjudicable scores.</p>
+            <p>
+              Load blinded tasks, sign marks locally, and submit adjudicable
+              scores.
+            </p>
           </Link>
         </div>
       </section>

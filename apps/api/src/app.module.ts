@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { AdminAuthoringController } from './admin-authoring.controller.js';
+import { AdminAuthoringService } from './admin-authoring.service.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminExamController } from './admin-exam.controller.js';
 import { AdminExamService } from './admin-exam.service.js';
@@ -24,6 +26,7 @@ import { StudentRegistrationService } from './student-registration.service.js';
 @Module({
   controllers: [
     AppController,
+    AdminAuthoringController,
     AdminExamController,
     StudentRegistrationController,
     StudentClaimController,
@@ -34,6 +37,7 @@ import { StudentRegistrationService } from './student-registration.service.js';
   ],
   providers: [
     AdminAuthService,
+    AdminAuthoringService,
     AdminExamService,
     AuditRootService,
     AppService,
