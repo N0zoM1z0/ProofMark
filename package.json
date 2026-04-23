@@ -16,6 +16,7 @@
     "test:playwright": "playwright test",
     "test:smoke": "tsx scripts/e2e-smoke.ts",
     "audit:dependencies": "corepack pnpm audit --audit-level high --prod",
+    "admin:mfa": "tsx scripts/admin-mfa.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",
     "verify:beta": "corepack pnpm db:validate && corepack pnpm lint && corepack pnpm test && corepack pnpm build",
     "format": "prettier --check .",

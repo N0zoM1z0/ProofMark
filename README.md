@@ -134,3 +134,5 @@ The repository currently includes:
 - `npm_config_registry=https://registry.npmjs.org pnpm audit --prod` reports one remaining moderate advisory in Prisma's bundled dev tooling; details live in [`docs/runbooks.md`](docs/runbooks.md)
 - [`docs/runbooks.md`](docs/runbooks.md) covers bring-up, MFA, key rotation, and recovery steps
 - [`docs/privacy-model.md`](docs/privacy-model.md) documents the identity-separation and log-redaction model
+- [`docs/demo-operator-quickstart.md`](docs/demo-operator-quickstart.md) gives the fastest path to a live local demo
+- [`docs/demo-walkthrough.md`](docs/demo-walkthrough.md) gives a role-by-role demo script for admin, students, markers, and auditor
