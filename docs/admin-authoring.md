@@ -203,7 +203,7 @@ Rules:
 
 ## Question Bank
 
-The question bank is intentionally simple in this phase:
+The question bank is intentionally simple in the current release:
 
 - it stores normalized MCQ or subjective prompts
 - it stores the correct choice id for MCQs

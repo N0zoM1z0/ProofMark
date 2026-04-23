@@ -248,9 +248,9 @@ export default function StudentRegisterPage() {
         <p className="eyebrow">Student Registration</p>
         <h1>Local Semaphore identity wallet</h1>
         <p className="lede">
-          This MVP page generates the Semaphore identity in the browser, encrypts
-          the exported private key with Web Crypto, stores it in IndexedDB, and
-          only sends the public commitment to the API.
+          Generate the Semaphore identity in the browser, encrypt the exported
+          private key with Web Crypto, store it in IndexedDB, and send only the
+          public commitment to the API.
         </p>
       </section>
 

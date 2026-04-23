@@ -1,6 +1,26 @@
 # ProofMark
 
-ProofMark is a privacy-preserving, verifiable exam and marking workflow. The initial MVP focuses on anonymous submission, deterministic grading proofs, tamper-evident audit logs, and verifiable receipts.
+ProofMark is a privacy-preserving assessment platform for running verifiable exams and marking workflows without exposing student identity throughout submission and review.
+
+It combines:
+
+- anonymous eligibility proofs with Semaphore
+- tamper-evident audit logs and signed receipts
+- deterministic grading proofs for objective questions
+- blind marking workflows for subjective questions
+- late-stage grade claim so identity is reconnected only when results are finalized
+
+## What ProofMark Supports
+
+- Teacher-facing exam authoring in `/admin`
+- JSON, Markdown, and CSV exam import with preview before persistence
+- Reusable exam templates and a shared question bank
+- Browser-local student identity wallets with encrypted backup and restore
+- Anonymous exam submission with nullifier-based double-submit protection
+- Signed receipts with local and server-side verification
+- Public manifests, audit root history, and proof artifact inspection
+- Blind marker assignment, local mark signing, and adjudication support
+- Finalized grade claim using the same anonymous identity used during submission
 
 ## Workspace
 
@@ -17,6 +37,7 @@ packages/
   zk-grading-noir/   Noir grading package
 prisma/              database schema and migrations
 infra/               local infrastructure notes and future deployment assets
+docs/                operator, workflow, privacy, and authoring documentation
 ```
 
 ## Requirements
@@ -25,7 +46,7 @@ infra/               local infrastructure notes and future deployment assets
 - Docker and Docker Compose
 - `pnpm` via Corepack
 
-## Local Development
+## Quick Start
 
 Enable `pnpm` through Corepack:
 
@@ -43,7 +64,28 @@ Start local services:
 
 ```bash
 docker compose up -d
+pnpm db:migrate:deploy
 ```
+
+Start the applications:
+
+```bash
+pnpm --filter @proofmark/api dev
+pnpm --filter @proofmark/web dev
+```
+
+Seed a local demo exam:
+
+```bash
+pnpm seed:demo
+```
+
+The default local experience is:
+
+- Web: `http://127.0.0.1:3101`
+- API: `http://127.0.0.1:3001`
+
+## Verification
 
 Run the workspace checks:
 
@@ -53,23 +95,47 @@ pnpm test
 pnpm build
 ```
 
-Run the beta verification matrix:
+Run the full release verification suite:
 
 ```bash
-pnpm verify:beta
+pnpm verify:release
 pnpm test:smoke
 pnpm test:load
+pnpm test:playwright
 ```
 
-Run the applications in development mode:
+## User-Facing Routes
 
-```bash
-pnpm --filter @proofmark/api dev
-pnpm --filter @proofmark/web dev
-pnpm --filter @proofmark/worker dev
-```
+- `/admin` for exam authoring, import preview, template reuse, question-bank reuse, exam export, and lifecycle actions
+- `/student/register` for local identity creation, encrypted backup export/import, and commitment registration
+- `/student/exam` for loading the public exam, restoring the wallet, encrypting responses, generating the proof, and submitting anonymously
+- `/student/claim` for claiming a finalized result with the same local identity and receipt
+- `/verify-receipt` for in-browser receipt verification
+- `/auditor` for manifest inspection, audit root history, proof artifact metadata, and stored receipt verification
+- `/marker` for blinded task review, local key storage, and signed mark submission
 
-## Environment
+## Public API Highlights
+
+- `GET /api/public/exams/:examId`
+- `GET /api/public/exams/:examId/manifest`
+- `GET /api/public/exams/:examId/group`
+- `GET /api/public/exams/:examId/audit-roots`
+- `GET /api/public/exams/:examId/proof-artifacts`
+- `GET /api/public/exams/:examId/submissions/:submissionId/finalized-grade`
+- `POST /api/public/verify-receipt`
+- `POST /api/admin/exams/:examId/markers`
+- `POST /api/admin/exams/:examId/assignments`
+- `GET /api/admin/exams`
+- `GET /api/admin/exams/:examId/export`
+- `POST /api/admin/imports/preview`
+- `GET/POST /api/admin/templates`
+- `GET/POST /api/admin/question-bank`
+- `GET /api/marker/exams`
+- `GET /api/marker/exams/:examId/tasks`
+- `GET /api/marker/tasks/:taskId`
+- `POST /api/marker/tasks/:taskId/marks`
+
+## Environment Notes
 
 Copy `.env.example` to `.env` and adjust values if needed. The default local stack expects:
 
@@ -77,68 +143,21 @@ Copy `.env.example` to `.env` and adjust values if needed. The default local sta
 - Redis on `localhost:56379`
 - MinIO on `localhost:59000`
 
-## Current Status
+Operationally important variables:
 
-The repository currently includes:
+- `PUBLIC_API_BASE_URL` for absolute upload URLs
+- `BLOB_ENCRYPTION_PRIVATE_KEY` for client-side answer blob encryption and later grading
+- `UPLOAD_TOKEN_SECRET` for one-time encrypted upload tokens
+- `MANIFEST_SIGNING_KEY` for stable manifest signatures
+- `RECEIPT_SIGNING_KEY` for stable receipt signatures
+- `ADMIN_IDS` and `ADMIN_MFA_SECRET` for admin mutation authorization
+- `LOG_REDACTION_SALT` for privacy-safe principal hashing in logs
 
-- Phase 0 foundation scaffolding
-- Phase 1 core exam domain schema and lifecycle guards
-- Phase 2 canonical hashing, audit chaining, Merkle proofs, and signed receipts
-- Phase 3 local Semaphore identity wallet and commitment registration
-- Phase 4 anonymous submission verification and receipt issuance
-- Phase 5 admin authoring plus signed public manifests
-- Phase 6 student MCQ exam-taking flow with encrypted blob upload, Web Worker proof generation, encrypted local draft recovery, and browser-side receipt verification
-- Phase 7 objective grading proof generation in the worker
-- Phase 8 finalized anonymous grades and claim flow
-- Phase 9 public auditor console, audit root history, proof artifact explorer, and server-side receipt verification
-- Phase 10 blind marking workflow with subjective submission slicing, deterministic assignment generation, local marker pseudonym signing, adjudication, and subjective grade aggregation
-- Phase 13 admin authoring workspace with draft editing, JSON/Markdown/CSV import preview, reusable templates, question-bank persistence, and exam JSON export
-- Phase 12 beta hardening with privacy-safe structured request logs, admin MFA gates, rate limits, payload guards, CSP/security headers, operator runbooks, and automated smoke/load/browser verification
-- an execution-ready implementation plan in [`docs/implementation-plan.md`](docs/implementation-plan.md)
+## Documentation
 
-## Public Routes
-
-- `/admin` for teacher-facing exam authoring, import preview, template reuse, question-bank reuse, exam export, and lifecycle actions
-- `/student/register` for local Semaphore wallet creation, backup export, import, and roster commitment registration
-- `/student/exam` for loading the public exam, restoring encrypted drafts, encrypting answer blobs, generating the proof in a worker, and submitting anonymously
-- `/student/claim` for reusing the same local identity plus receipt to claim a finalized grade once the exam reaches `CLAIMING`
-- `/verify-receipt` for browser-side receipt verification without privileged API access
-- `/auditor` for manifest inspection, audit root history, group root history, proof artifact metadata, and receipt verification against stored server records
-- `/marker` for blinded task review, local pseudonym-key storage, signed mark submission, and adjudication handling
-
-## Public API Highlights
-
-- `GET /api/public/exams/:examId` for published exam metadata
-- `GET /api/public/exams/:examId/manifest` for the signed public manifest
-- `GET /api/public/exams/:examId/group` for the active Semaphore group snapshot
-- `GET /api/public/exams/:examId/audit-roots` for cumulative audit root and group root history
-- `GET /api/public/exams/:examId/proof-artifacts` for verified proof artifact metadata
-- `GET /api/public/exams/:examId/submissions/:submissionId/finalized-grade` for finalized grade and proof metadata
-- `POST /api/public/verify-receipt` for server-side receipt validation against stored records
-- `POST /api/admin/exams/:examId/markers` to enroll marker pseudonyms and issue local signing keys
-- `POST /api/admin/exams/:examId/assignments` to slice subjective parts and generate deterministic blind marking tasks
-- `GET /api/admin/exams`, `GET /api/admin/exams/:examId/export`, `POST /api/admin/imports/preview`, `GET/POST /api/admin/templates`, and `GET/POST /api/admin/question-bank` for the teacher authoring workflow
-- `GET /api/marker/exams`, `GET /api/marker/exams/:examId/tasks`, `GET /api/marker/tasks/:taskId`, and `POST /api/marker/tasks/:taskId/marks` for the blinded marker workflow
-
-## Additional Environment Notes
-
-- `PUBLIC_API_BASE_URL` is used by the submission upload flow to mint absolute upload URLs
-- `BLOB_ENCRYPTION_PRIVATE_KEY` controls the RSA key used for client-side answer blob encryption; `dev-static-proofmark-key` is only for local development
-- `UPLOAD_TOKEN_SECRET` signs one-time upload tokens for encrypted submission blobs
-- `MANIFEST_SIGNING_KEY` and `RECEIPT_SIGNING_KEY` should be set to stable long-lived Ed25519 keys outside local development if public verification needs to survive service restarts
-- `ADMIN_IDS` and `ADMIN_MFA_SECRET` protect all admin mutation endpoints; local examples are included in `.env.example`
-- `LOG_REDACTION_SALT` salts hashed principals in structured request logs
-
-## Verification and Operations
-
-- `pnpm seed:demo` seeds one committed exam in `REGISTRATION`, ready for a browser wallet to register before admin publish/open
-- `pnpm test:smoke` runs the full register -> submit -> mark -> grade -> claim -> verify lifecycle
-- `pnpm test:load` runs a concurrent registration/submission/grading smoke for capacity regression checks
-- `pnpm test:playwright` runs a browser-level registration/submission/receipt verification smoke
-- `npm_config_registry=https://registry.npmjs.org pnpm audit --prod` reports one remaining moderate advisory in Prisma's bundled dev tooling; details live in [`docs/runbooks.md`](docs/runbooks.md)
-- [`docs/runbooks.md`](docs/runbooks.md) covers bring-up, MFA, key rotation, and recovery steps
-- [`docs/privacy-model.md`](docs/privacy-model.md) documents the identity-separation and log-redaction model
-- [`docs/demo-operator-quickstart.md`](docs/demo-operator-quickstart.md) gives the fastest path to a live local demo
-- [`docs/demo-walkthrough.md`](docs/demo-walkthrough.md) gives a role-by-role demo script for admin, students, markers, and auditor
-- [`docs/admin-authoring.md`](docs/admin-authoring.md) documents the teacher-facing authoring/import/template/question-bank workflow
-- [`docs/workflow-and-roles.md`](docs/workflow-and-roles.md) documents the end-to-end lifecycle, state transitions, and exact responsibilities of each role
+- [docs/runbooks.md](docs/runbooks.md): local bring-up, MFA, key rotation, and recovery procedures
+- [docs/workflow-and-roles.md](docs/workflow-and-roles.md): lifecycle, role boundaries, and state transitions
+- [docs/admin-authoring.md](docs/admin-authoring.md): exam authoring, import formats, templates, and question-bank workflow
+- [docs/privacy-model.md](docs/privacy-model.md): identity separation, log redaction, and privacy boundaries
+- [docs/demo-operator-quickstart.md](docs/demo-operator-quickstart.md): shortest path to a live local demo
+- [docs/demo-walkthrough.md](docs/demo-walkthrough.md): role-by-role live demo script

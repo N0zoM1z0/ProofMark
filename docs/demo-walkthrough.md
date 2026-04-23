@@ -14,7 +14,7 @@ Show that ProofMark can:
 - separate identity from submission
 - enforce one anonymous submission per identity
 - produce a locally verifiable receipt
-- blind the subjective marking phase
+- blind the subjective marking workflow
 - publish a finalized grade that can be claimed back to the student
 
 ## Suggested timeline

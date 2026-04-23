@@ -1,4 +1,6 @@
-# ProofMark Implementation Plan
+# ProofMark Historical Implementation Plan
+
+This document is kept as an internal planning record. It reflects the staged delivery plan used during initial build-out, not the primary operator or user-facing documentation set.
 
 ## 1. Purpose
 

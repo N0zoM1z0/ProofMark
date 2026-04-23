@@ -232,7 +232,7 @@ export default function MarkerPage() {
   return (
     <main className="shell">
       <section className="hero">
-        <p className="eyebrow">Phase 10</p>
+        <p className="eyebrow">Marker Console</p>
         <h1>Blind marker console with local pseudonym signing.</h1>
         <p className="lede">
           This console only receives blinded question content and response text. It

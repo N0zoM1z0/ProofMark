@@ -208,7 +208,7 @@ export default function AuditorPage() {
   return (
     <main className="shell">
       <section className="hero">
-        <p className="eyebrow">Phase 9</p>
+        <p className="eyebrow">Auditor Console</p>
         <h1>Auditor console for public evidence and tamper checks.</h1>
         <p className="lede">
           Inspect the published manifest, replay group root growth, browse verified

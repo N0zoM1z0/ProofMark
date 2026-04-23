@@ -45,7 +45,7 @@ Local defaults:
 - `x-admin-id: admin-demo`
 - `ADMIN_MFA_SECRET: proofmark-dev-admin-mfa-secret`
 
-## 4. Student registration phase
+## 4. Student registration
 
 Each student opens:
 
@@ -90,7 +90,7 @@ curl -sS -X POST "http://127.0.0.1:3001/api/admin/exams/$EXAM_ID/open" \
   -H "x-admin-mfa-code: $MFA_CODE"
 ```
 
-## 6. Student submission phase
+## 6. Student submission
 
 Each student opens:
 
@@ -106,7 +106,7 @@ Steps:
 6. Click `Submit Anonymously`.
 7. Save the displayed receipt JSON or keep it in browser storage.
 
-## 7. Auditor verification phase
+## 7. Auditor verification
 
 Auditor can use:
 
@@ -208,7 +208,7 @@ curl -sS -X POST "http://127.0.0.1:3001/api/admin/exams/$EXAM_ID/claiming" \
 
 Students can then claim their finalized grade with the same local identity they used to submit.
 
-## 13. Student claim phase
+## 13. Student claim
 
 Student opens:
 

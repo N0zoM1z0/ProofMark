@@ -1,6 +1,6 @@
 # ProofMark Runbooks
 
-## Local Beta Bring-Up
+## Local Bring-Up
 
 1. `corepack prepare pnpm@10.10.0 --activate`
 2. `pnpm install`
@@ -74,7 +74,7 @@ Recovery:
 
 ## Verification Commands
 
-- Full beta verification: `pnpm verify:beta`
+- Full release verification: `pnpm verify:release`
 - End-to-end lifecycle smoke: `pnpm test:smoke`
 - Browser smoke: `pnpm test:playwright`
 - Concurrent load smoke: `pnpm test:load`

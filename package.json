@@ -18,7 +18,8 @@
     "audit:dependencies": "corepack pnpm audit --audit-level high --prod",
     "admin:mfa": "tsx scripts/admin-mfa.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",
-    "verify:beta": "corepack pnpm db:validate && corepack pnpm lint && corepack pnpm test && corepack pnpm build",
+    "verify:release": "corepack pnpm db:validate && corepack pnpm lint && corepack pnpm test && corepack pnpm build",
+    "verify:beta": "corepack pnpm verify:release",
     "format": "prettier --check .",
     "format:write": "prettier --write ."
   },
