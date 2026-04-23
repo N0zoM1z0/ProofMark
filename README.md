@@ -167,5 +167,6 @@ Operationally important variables:
 - [docs/workflow-and-roles.md](docs/workflow-and-roles.md): lifecycle, role boundaries, and state transitions
 - [docs/admin-authoring.md](docs/admin-authoring.md): exam authoring, import formats, templates, and question-bank workflow
 - [docs/privacy-model.md](docs/privacy-model.md): identity separation, log redaction, and privacy boundaries
+- [docs/wallet-recovery-design.md](docs/wallet-recovery-design.md): recovery package model, lifecycle, and operator approval design
 - [docs/demo-operator-quickstart.md](docs/demo-operator-quickstart.md): shortest path to a live local demo
 - [docs/demo-walkthrough.md](docs/demo-walkthrough.md): role-by-role live demo script

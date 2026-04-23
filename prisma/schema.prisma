@@ -51,6 +51,21 @@ enum ClaimStatus {
   REVOKED
 }
 
+enum WalletRecoveryPackageStatus {
+  ACTIVE
+  RESTORED
+  REVOKED
+  EXPIRED
+}
+
+enum WalletRecoveryRequestStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  COMPLETED
+  CANCELLED
+}
+
 enum SubmissionPartStatus {
   READY
   ADJUDICATION_REQUIRED
@@ -104,6 +119,8 @@ model Exam {
   auditRoots           AuditRoot[]
   grades               Grade[]
   gradeClaims          GradeClaim[]
+  walletRecoveryPackages WalletRecoveryPackage[]
+  walletRecoveryRequests WalletRecoveryRequest[]
 }
 
 model ExamTemplate {
@@ -390,4 +407,51 @@ model GradeClaim {
 
   @@unique([examId, submissionId])
   @@index([examId, claimedAt])
+}
+
+model WalletRecoveryPackage {
+  id                           String                      @id @default(uuid())
+  examId                       String
+  identityCommitment           String
+  userReferenceCiphertext      String
+  encryptedIdentityCiphertext  String
+  encryptedIdentityIv          String
+  encryptedIdentitySalt        String
+  operatorWrapCiphertext       String?
+  packageHash                  String
+  status                       WalletRecoveryPackageStatus @default(ACTIVE)
+  escrowedAt                   DateTime                    @default(now())
+  restoredAt                   DateTime?
+  revokedAt                    DateTime?
+  expiresAt                    DateTime?
+  auditEventId                 String?
+  createdAt                    DateTime                    @default(now())
+  updatedAt                    DateTime                    @updatedAt
+  exam                         Exam                        @relation(fields: [examId], references: [id], onDelete: Cascade)
+  requests                     WalletRecoveryRequest[]
+
+  @@unique([examId, identityCommitment])
+  @@index([examId, escrowedAt])
+  @@index([status, expiresAt])
+}
+
+model WalletRecoveryRequest {
+  id                           String                      @id @default(uuid())
+  examId                       String
+  walletRecoveryPackageId      String
+  requestedByCiphertext        String
+  operatorReferenceCiphertext  String?
+  status                       WalletRecoveryRequestStatus @default(REQUESTED)
+  reason                       String?
+  requestedAt                  DateTime                    @default(now())
+  reviewedAt                   DateTime?
+  completedAt                  DateTime?
+  auditEventId                 String?
+  createdAt                    DateTime                    @default(now())
+  updatedAt                    DateTime                    @updatedAt
+  exam                         Exam                        @relation(fields: [examId], references: [id], onDelete: Cascade)
+  walletRecoveryPackage        WalletRecoveryPackage       @relation(fields: [walletRecoveryPackageId], references: [id], onDelete: Cascade)
+
+  @@index([examId, requestedAt])
+  @@index([walletRecoveryPackageId, status])
 }
