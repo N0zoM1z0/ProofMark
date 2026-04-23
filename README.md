@@ -99,6 +99,7 @@ The repository currently includes:
 
 - `/student/register` for local Semaphore wallet creation, backup export, import, and roster commitment registration
 - `/student/exam` for loading the public exam, restoring encrypted drafts, encrypting answer blobs, generating the proof in a worker, and submitting anonymously
+- `/student/claim` for reusing the same local identity plus receipt to claim a finalized grade once the exam reaches `CLAIMING`
 - `/verify-receipt` for browser-side receipt verification without privileged API access
 - `/auditor` for manifest inspection, audit root history, group root history, proof artifact metadata, and receipt verification against stored server records
 - `/marker` for blinded task review, local pseudonym-key storage, signed mark submission, and adjudication handling
@@ -136,3 +137,4 @@ The repository currently includes:
 - [`docs/privacy-model.md`](docs/privacy-model.md) documents the identity-separation and log-redaction model
 - [`docs/demo-operator-quickstart.md`](docs/demo-operator-quickstart.md) gives the fastest path to a live local demo
 - [`docs/demo-walkthrough.md`](docs/demo-walkthrough.md) gives a role-by-role demo script for admin, students, markers, and auditor
+- [`docs/workflow-and-roles.md`](docs/workflow-and-roles.md) documents the end-to-end lifecycle, state transitions, and exact responsibilities of each role

@@ -40,6 +40,11 @@ export default function HomePage() {
             <strong>Take Exam</strong>
             <p>Answer MCQs, upload encrypted blobs, and submit anonymously.</p>
           </Link>
+          <Link href="/student/claim" className="nav-tile">
+            <span className="eyebrow">Phase 8</span>
+            <strong>Claim Grade</strong>
+            <p>Use the same local identity and receipt to reclaim the finalized result.</p>
+          </Link>
           <Link href="/verify-receipt" className="nav-tile">
             <span className="eyebrow">Audit</span>
             <strong>Verify Receipt</strong>

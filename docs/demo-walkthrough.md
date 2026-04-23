@@ -126,7 +126,12 @@ Then admin calls:
 
 ### Part 8. Student claim
 
-Students use the same local identity to claim the finalized grade.
+Students open `/student/claim` and:
+
+1. load the claim context
+2. reuse the stored receipt or upload the saved receipt JSON
+3. unlock the same local identity
+4. claim the finalized grade
 
 Operator says:
 

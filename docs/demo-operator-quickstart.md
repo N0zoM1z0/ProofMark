@@ -207,3 +207,21 @@ curl -sS -X POST "http://127.0.0.1:3001/api/admin/exams/$EXAM_ID/claiming" \
 ```
 
 Students can then claim their finalized grade with the same local identity they used to submit.
+
+## 13. Student claim phase
+
+Student opens:
+
+- `http://127.0.0.1:3101/student/claim`
+
+Steps:
+
+1. Enter the `examId`.
+2. Enter the same student id used during registration.
+3. Enter the same wallet passphrase used to unlock the local identity.
+4. Click `Load Claim Context`.
+5. If the receipt is not found in local storage, upload the saved receipt JSON.
+6. Click `Unlock Identity`.
+7. Click `Claim Finalized Grade`.
+
+The page rebuilds the claim proof locally and submits the grade claim only when the exam is in `CLAIMING`.
