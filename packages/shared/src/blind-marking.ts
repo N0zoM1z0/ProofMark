@@ -97,6 +97,10 @@ function compareHashes(left: string, right: string) {
   return left.localeCompare(right);
 }
 
+function roundScore(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
 export function normalizeBlindMarkingPolicy(
   policy: Partial<BlindMarkingPolicy> | undefined
 ): BlindMarkingPolicy {
@@ -237,7 +241,7 @@ export function evaluateBlindMarkingScores(params: {
 
     return {
       adjudicationRequired: true,
-      averageScore: adjudicatedAverage,
+      averageScore: roundScore(adjudicatedAverage),
       delta,
       finalized: true,
       shouldCreateAdjudication: false
@@ -246,9 +250,10 @@ export function evaluateBlindMarkingScores(params: {
 
   return {
     adjudicationRequired: false,
-    averageScore:
+    averageScore: roundScore(
       baselineScores.reduce((total, score) => total + score, 0) /
-      baselineScores.length,
+        baselineScores.length
+    ),
     delta,
     finalized: true,
     shouldCreateAdjudication: false

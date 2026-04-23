@@ -22,6 +22,7 @@
     "@prisma/client": "^7.7.0",
     "@proofmark/crypto": "workspace:*",
     "@proofmark/shared": "workspace:*",
+    "@proofmark/zk-grading-noir": "workspace:*",
     "@semaphore-protocol/group": "^4.14.2",
     "@semaphore-protocol/proof": "^4.14.2",
     "pg": "^8.20.0",

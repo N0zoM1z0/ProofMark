@@ -563,6 +563,7 @@ async function main() {
     }>(`/api/public/exams/${examSetup.examId}/audit-roots`);
     const proofArtifacts = await fetchJson<{
       proofArtifacts: Array<{
+        type: string;
         verificationStatus: string;
       }>;
     }>(`/api/public/exams/${examSetup.examId}/proof-artifacts`);
@@ -597,12 +598,26 @@ async function main() {
       modifiedEncryptedBlobHashRejected: true,
       noPlainStudentIdInSubmission:
         !JSON.stringify(persistedSubmission).includes(studentId),
+      finalCompositionProofVerified:
+        proofArtifacts.proofArtifacts.some(
+          (artifact) =>
+            artifact.type === 'final-grade-composition-proof' &&
+            artifact.verificationStatus === 'VERIFIED'
+        ),
       objectiveProofVerified:
         proofArtifacts.proofArtifacts.some(
-          (artifact) => artifact.verificationStatus === 'VERIFIED'
+          (artifact) =>
+            artifact.type === 'objective-grade-proof' &&
+            artifact.verificationStatus === 'VERIFIED'
         ) && workerResult.gradedCount === 1,
       receiptTamperingRejected: tamperedReceiptVerification.verified === false,
       serverReceiptVerified: serverReceiptVerification.verified,
+      subjectiveAggregationProofVerified:
+        proofArtifacts.proofArtifacts.some(
+          (artifact) =>
+            artifact.type === 'subjective-aggregation-proof' &&
+            artifact.verificationStatus === 'VERIFIED'
+        ),
       studentClaimBoundToIdentity:
         claimResult.grade.gradeId === finalizedGrade.grade.gradeId &&
         String(claimResult.grade.finalScore) ===
@@ -637,6 +652,9 @@ async function main() {
           initialAssignedMarkerCount: initiallyAssignedMarkers.length,
           manifestHash: manifest.manifestHash,
           proofArtifactCount: proofArtifacts.proofArtifacts.length,
+          proofArtifactTypes: proofArtifacts.proofArtifacts.map(
+            (artifact) => artifact.type
+          ),
           receiptVerified: serverReceiptVerification.verified,
           registrationRoot: registration.groupRoot,
           submissionId: submissionResult.submissionId

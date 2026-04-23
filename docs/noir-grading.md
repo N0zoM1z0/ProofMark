@@ -1,34 +1,61 @@
-# Objective Grading Proofs
+# Grading Proofs
 
-ProofMark now runs the objective grading backend through a real Noir circuit and
-Barretenberg CLI proof flow.
+ProofMark runs grading proof generation through real Noir circuits and the
+Barretenberg CLI proof flow. The backend is registry-based so each proof type has
+an explicit circuit name, circuit version, verification-key hash, proof hash, and
+public-input hash.
 
-## Circuit
+## Circuits
 
-Source:
+Current circuits:
 
 - `circuits/fixed_mcq_grading/src/main.nr`
 - `circuits/fixed_mcq_grading/Nargo.toml`
+- `circuits/subjective_aggregation/src/main.nr`
+- `circuits/subjective_aggregation/Nargo.toml`
+- `circuits/final_grade_composition/src/main.nr`
+- `circuits/final_grade_composition/Nargo.toml`
 
-Compiled artifact used by the worker package:
+Compiled artifacts used by `@proofmark/zk-grading-noir`:
 
 - `packages/zk-grading-noir/src/artifacts/fixed_mcq_grading.json`
+- `packages/zk-grading-noir/src/artifacts/subjective_aggregation.json`
+- `packages/zk-grading-noir/src/artifacts/final_grade_composition.json`
 
-The circuit proves that:
+The fixed MCQ circuit proves that:
 
 - the private selected-choice hashes and private correct-choice hashes produce
   the published objective score
 - `score == count(matches) * pointsPerQuestion`
 - `maxScore == questionCount * pointsPerQuestion`
 
-The worker still checks the outer ProofMark commitments before proving:
+The subjective aggregation circuit proves that:
+
+- each submitted mark is within the part's max-score bound
+- baseline marker scores are aggregated according to `markersPerPart`
+- adjudication is required when baseline delta exceeds `adjudicationDelta`
+- adjudicated parts aggregate all submitted marks
+- `subjectiveScore` and `subjectiveMaxScore` match the proved part totals
+
+The final grade composition circuit proves that:
+
+- `finalScore == objectiveScore + subjectiveScore`
+- `maxScore == objectiveMaxScore + subjectiveMaxScore`
+
+ProofMark still checks outer commitments and non-circuit-friendly material in
+TypeScript before proving:
 
 - answer sheet commitment
 - answer-key commitment
 - grading-policy hash
+- subjective part commitments
+- marker signatures
+- grade commitment
+- proof-artifact root
 
-This keeps JSON canonicalization and answer-key commitment logic in TypeScript,
-while the score computation itself is proven by Noir/Barretenberg.
+This keeps JSON canonicalization, SHA-256 commitments, and Ed25519 marker
+signature verification in TypeScript, while deterministic score arithmetic and
+aggregation rules are proven by Noir/Barretenberg.
 
 ## Runtime Requirements
 
@@ -54,6 +81,16 @@ cd circuits/fixed_mcq_grading
 nargo check
 nargo compile
 cp target/fixed_mcq_grading.json ../../packages/zk-grading-noir/src/artifacts/fixed_mcq_grading.json
+
+cd ../subjective_aggregation
+nargo check
+nargo compile
+cp target/subjective_aggregation.json ../../packages/zk-grading-noir/src/artifacts/subjective_aggregation.json
+
+cd ../final_grade_composition
+nargo check
+nargo compile
+cp target/final_grade_composition.json ../../packages/zk-grading-noir/src/artifacts/final_grade_composition.json
 ```
 
 Then run:
@@ -79,3 +116,9 @@ The stored `ProofArtifact` records:
 - public-input hash
 - verification-key hash
 - verification status
+
+Supported proof artifact types:
+
+- `objective-grade-proof`
+- `subjective-aggregation-proof`
+- `final-grade-composition-proof`

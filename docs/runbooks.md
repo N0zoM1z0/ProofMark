@@ -22,7 +22,7 @@
 
 ## Current Release Limitations
 
-- Objective proof artifacts now come from the `fixed_mcq_grading` Noir circuit and Barretenberg CLI. The supported circuit is intentionally narrow: fixed MCQ scoring over hashed choice inputs, with outer ProofMark commitments checked by the worker.
+- Grading proof artifacts now come from a registry of Noir circuits and Barretenberg CLI proofs. Supported circuits cover fixed MCQ objective scoring, subjective blind-mark aggregation, and final grade composition. Outer ProofMark commitments, SHA-256 canonicalization, and marker signatures are still checked by TypeScript services before proving.
 - Student claim still depends on the browser-local Semaphore identity. Recovery works only when the student previously escrowed the encrypted recovery package and still knows the original wallet passphrase.
 
 These are release-significant limitations, not minor gaps.
@@ -107,7 +107,7 @@ Recovery:
 
 Do not sign off a production-style rollout unless all of the following are true:
 
-- operators acknowledge the supported scope of the fixed MCQ Noir grading circuit
+- operators acknowledge the supported scope of the Noir grading registry: fixed MCQ objective scoring, blind-mark aggregation, and final grade composition
 - student communications explicitly require encrypted wallet backup export before submission and before claim
 - support staff understand that wallet loss is recoverable only when the student escrowed a recovery package earlier and still remembers the wallet passphrase
 - the environment owner has installed compatible `nargo` and `bb` binaries and verified `@proofmark/zk-grading-noir` tests in the target environment

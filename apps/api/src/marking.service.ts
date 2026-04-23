@@ -11,6 +11,7 @@ import {
   GradingTaskStatus,
   MarkerStatus,
   Prisma,
+  ProofVerificationStatus,
   SubmissionPartStatus,
   SubmissionStatus
 } from '@prisma/client';
@@ -25,6 +26,14 @@ import {
   generateEd25519KeyPair,
   verifyCanonicalSignature
 } from '@proofmark/crypto';
+import {
+  createFinalGradeCommitment,
+  generateFinalGradeCompositionProof,
+  generateSubjectiveAggregationProof,
+  verifyFinalGradeCompositionProof,
+  verifySubjectiveAggregationProof,
+  type SubjectiveAggregationPrivateInputs
+} from '@proofmark/zk-grading-noir';
 import { decryptSubmissionBlobPayload } from './blob-encryption.js';
 import { BlobStorageService } from './blob-storage.service.js';
 import { PrismaService } from './prisma.service.js';
@@ -91,6 +100,19 @@ function buildAdjudicationAssignmentCommitment(params: {
       partCommitment: params.partCommitment,
       submissionPartId: params.submissionPartId,
       version: 'proofmark-adjudication-assignment-v1'
+    })
+  )}`;
+}
+
+function buildProofArtifactsRoot(params: {
+  proofHashes: string[];
+  submissionId: string;
+}) {
+  return `sha256:${sha256Hex(
+    canonicalJson({
+      proofHashes: [...params.proofHashes].sort(),
+      submissionId: params.submissionId,
+      version: 'proofmark-proof-artifacts-root-v1'
     })
   )}`;
 }
@@ -723,7 +745,7 @@ export class MarkingService {
         : undefined
     );
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const auditEvent = await appendAuditEvent(tx, {
         actorPseudonym: task.marker.pseudonymLabel,
         actorRole: 'MARKER',
@@ -772,9 +794,258 @@ export class MarkingService {
         adjudicationRequired: aggregation.adjudicationRequired,
         markId: createdMark.id,
         score: createdMark.score,
+        submissionId: task.submissionPart.submissionId,
         status: aggregation.status,
         taskId: task.id
       };
+    });
+
+    if (result.status === SubmissionPartStatus.GRADED) {
+      await this.generateSubjectiveProofsForSubmission({
+        examId: task.exam.id,
+        submissionId: result.submissionId
+      });
+    }
+
+    return {
+      adjudicationRequired: result.adjudicationRequired,
+      markId: result.markId,
+      score: result.score,
+      status: result.status,
+      taskId: result.taskId
+    };
+  }
+
+  private async generateSubjectiveProofsForSubmission(params: {
+    examId: string;
+    submissionId: string;
+  }) {
+    const existingSubjectiveProof = await this.prisma.proofArtifact.findFirst({
+      where: {
+        submissionId: params.submissionId,
+        type: 'subjective-aggregation-proof',
+        verificationStatus: ProofVerificationStatus.VERIFIED
+      }
+    });
+    const existingFinalProof = await this.prisma.proofArtifact.findFirst({
+      where: {
+        submissionId: params.submissionId,
+        type: 'final-grade-composition-proof',
+        verificationStatus: ProofVerificationStatus.VERIFIED
+      }
+    });
+
+    if (existingSubjectiveProof && existingFinalProof) {
+      return;
+    }
+
+    const exam = await this.prisma.exam.findUnique({
+      where: {
+        id: params.examId
+      },
+      select: {
+        gradingPolicyData: true
+      }
+    });
+    const submissionParts = await this.prisma.submissionPart.findMany({
+      where: {
+        submissionId: params.submissionId
+      },
+      include: {
+        marks: {
+          orderBy: {
+            createdAt: 'asc'
+          }
+        }
+      },
+      orderBy: {
+        partIndex: 'asc'
+      }
+    });
+
+    if (
+      !exam ||
+      submissionParts.length === 0 ||
+      submissionParts.some((part) => part.status !== SubmissionPartStatus.GRADED)
+    ) {
+      return;
+    }
+
+    const grade = await this.prisma.grade.findFirst({
+      where: {
+        examId: params.examId,
+        status: {
+          in: [GradeStatus.DRAFT, GradeStatus.VERIFIED]
+        },
+        submissionId: params.submissionId
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    if (!grade) {
+      return;
+    }
+
+    const policy = normalizeBlindMarkingPolicy(
+      Object.prototype.toString.call(exam.gradingPolicyData) === '[object Object]'
+        ? ((exam.gradingPolicyData as Record<string, unknown>).subjectiveMarking as
+            | Partial<{
+                adjudicationDelta: number;
+                markersPerPart: number;
+              }>
+            | undefined)
+        : undefined
+    );
+    const subjectiveInputs: SubjectiveAggregationPrivateInputs = {
+      parts: submissionParts.map((part) => ({
+        marks: part.marks.map((mark) => ({
+          markerId: mark.markerId,
+          score: toNumber(mark.score)
+        })),
+        maxScore: toNumber(part.maxScore),
+        partCommitment: part.partCommitment,
+        partId: part.id
+      })),
+      policy
+    };
+    const subjectiveProof = await generateSubjectiveAggregationProof({
+      privateInputs: subjectiveInputs
+    });
+    const subjectiveVerification = await verifySubjectiveAggregationProof({
+      privateInputs: subjectiveInputs,
+      proof: subjectiveProof
+    });
+
+    if (!subjectiveVerification.verified) {
+      throw new Error('SUBJECTIVE_AGGREGATION_PROOF_INVALID');
+    }
+
+    const objectiveScore = toNumber(grade.objectiveScore);
+    const subjectiveScore = subjectiveProof.publicInputs.subjectiveScore;
+    const subjectiveMaxScore = subjectiveProof.publicInputs.subjectiveMaxScore;
+    const currentMaxScore = toNumber(grade.maxScore);
+    const objectiveMaxScore = Math.max(currentMaxScore - subjectiveMaxScore, 0);
+    const finalScore = objectiveScore + subjectiveScore;
+    const maxScore = objectiveMaxScore + subjectiveMaxScore;
+    const existingProofArtifacts = await this.prisma.proofArtifact.findMany({
+      where: {
+        submissionId: params.submissionId,
+        type: {
+          not: 'final-grade-composition-proof'
+        },
+        verificationStatus: ProofVerificationStatus.VERIFIED
+      },
+      select: {
+        proofHash: true,
+        type: true
+      }
+    });
+    const hasObjectiveProof = existingProofArtifacts.some(
+      (artifact) => artifact.type === 'objective-grade-proof'
+    );
+    const proofArtifactsRoot = buildProofArtifactsRoot({
+      proofHashes: [
+        ...existingProofArtifacts.map((artifact) => artifact.proofHash),
+        subjectiveProof.proofHash
+      ],
+      submissionId: params.submissionId
+    });
+
+    if (!hasObjectiveProof && grade.objectiveScore === null) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.proofArtifact.create({
+          data: {
+            circuitName: subjectiveProof.circuitName,
+            circuitVersion: subjectiveProof.circuitVersion,
+            examId: params.examId,
+            proofHash: subjectiveProof.proofHash,
+            publicInputsHash: subjectiveProof.publicInputsHash,
+            submissionId: params.submissionId,
+            type: 'subjective-aggregation-proof',
+            verificationStatus: ProofVerificationStatus.VERIFIED,
+            vkHash: subjectiveProof.verificationKeyHash
+          }
+        });
+        await tx.grade.update({
+          where: {
+            id: grade.id
+          },
+          data: {
+            maxScore: subjectiveMaxScore,
+            proofArtifactsRoot,
+            subjectiveScore
+          }
+        });
+      });
+      return;
+    }
+
+    const gradeCommitment = createFinalGradeCommitment({
+      finalScore,
+      maxScore,
+      objectiveScore,
+      subjectiveScore,
+      submissionId: params.submissionId
+    });
+    const finalProof = await generateFinalGradeCompositionProof({
+      finalScore,
+      gradeCommitment,
+      maxScore,
+      objectiveMaxScore,
+      objectiveScore,
+      proofArtifactsRoot,
+      subjectiveMaxScore,
+      subjectiveScore
+    });
+    const finalVerification = await verifyFinalGradeCompositionProof({
+      proof: finalProof
+    });
+
+    if (!finalVerification.verified) {
+      throw new Error('FINAL_GRADE_COMPOSITION_PROOF_INVALID');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.proofArtifact.create({
+        data: {
+          circuitName: subjectiveProof.circuitName,
+          circuitVersion: subjectiveProof.circuitVersion,
+          examId: params.examId,
+          proofHash: subjectiveProof.proofHash,
+          publicInputsHash: subjectiveProof.publicInputsHash,
+          submissionId: params.submissionId,
+          type: 'subjective-aggregation-proof',
+          verificationStatus: ProofVerificationStatus.VERIFIED,
+          vkHash: subjectiveProof.verificationKeyHash
+        }
+      });
+      await tx.proofArtifact.create({
+        data: {
+          circuitName: finalProof.circuitName,
+          circuitVersion: finalProof.circuitVersion,
+          examId: params.examId,
+          proofHash: finalProof.proofHash,
+          publicInputsHash: finalProof.publicInputsHash,
+          submissionId: params.submissionId,
+          type: 'final-grade-composition-proof',
+          verificationStatus: ProofVerificationStatus.VERIFIED,
+          vkHash: finalProof.verificationKeyHash
+        }
+      });
+      await tx.grade.update({
+        where: {
+          id: grade.id
+        },
+        data: {
+          finalScore,
+          gradeCommitment,
+          maxScore,
+          proofArtifactsRoot,
+          subjectiveScore
+        }
+      });
     });
   }
 

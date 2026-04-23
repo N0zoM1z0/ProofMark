@@ -3,9 +3,14 @@ import { sha256Canonical } from '@proofmark/crypto';
 import { describe, expect, it } from 'vitest';
 import {
   ensureBarretenbergAvailable,
+  generateFinalGradeCompositionProof,
   generateObjectiveGradeProof,
+  generateSubjectiveAggregationProof,
+  gradingProofRegistry,
   objectiveGradingCircuitVersion,
   objectiveGradingVerifierHash,
+  verifyFinalGradeCompositionProof,
+  verifySubjectiveAggregationProof,
   verifyObjectiveGradeProof
 } from '../src/index.js';
 
@@ -136,4 +141,91 @@ describe('zk-grading-noir Barretenberg backend', () => {
       })
     ).rejects.toThrow('ANSWER_KEY_COMMITMENT_MISMATCH');
   });
+
+  it(
+    'generates and verifies subjective aggregation and final composition proofs',
+    async () => {
+      const subjectiveInputs = {
+        parts: [
+          {
+            marks: [
+              {
+                markerId: 'marker-a',
+                score: 7
+              },
+              {
+                markerId: 'marker-b',
+                score: 9
+              }
+            ],
+            maxScore: 10,
+            partCommitment: 'sha256:part-1',
+            partId: 'part-1'
+          },
+          {
+            marks: [
+              {
+                markerId: 'marker-a',
+                score: 6
+              },
+              {
+                markerId: 'marker-b',
+                score: 10
+              },
+              {
+                markerId: 'marker-c',
+                score: 8
+              }
+            ],
+            maxScore: 10,
+            partCommitment: 'sha256:part-2',
+            partId: 'part-2'
+          }
+        ],
+        policy: {
+          adjudicationDelta: 2,
+          markersPerPart: 2
+        }
+      };
+      const subjectiveProof = await generateSubjectiveAggregationProof({
+        privateInputs: subjectiveInputs
+      });
+      const subjectiveVerification = await verifySubjectiveAggregationProof({
+        privateInputs: subjectiveInputs,
+        proof: subjectiveProof
+      });
+      const finalProof = await generateFinalGradeCompositionProof({
+        objectiveMaxScore: 4,
+        objectiveScore: 3,
+        proofArtifactsRoot: 'sha256:proof-artifacts',
+        subjectiveMaxScore: subjectiveProof.publicInputs.subjectiveMaxScore,
+        subjectiveScore: subjectiveProof.publicInputs.subjectiveScore,
+        submissionId: 'submission-1'
+      });
+      const finalVerification = await verifyFinalGradeCompositionProof({
+        proof: finalProof
+      });
+
+      expect(gradingProofRegistry.subjectiveAggregation.proofType).toBe(
+        'subjective-aggregation-proof'
+      );
+      expect(subjectiveProof.publicInputs.subjectiveScore).toBe(16);
+      expect(subjectiveProof.publicInputs.subjectiveMaxScore).toBe(20);
+      expect(subjectiveVerification.verified).toBe(true);
+      expect(finalProof.publicInputs.finalScore).toBe(19);
+      expect(finalProof.publicInputs.maxScore).toBe(24);
+      expect(finalVerification.verified).toBe(true);
+
+      await expect(
+        generateFinalGradeCompositionProof({
+          finalScore: 18,
+          objectiveMaxScore: 4,
+          objectiveScore: 3,
+          subjectiveMaxScore: 20,
+          subjectiveScore: 16
+        })
+      ).rejects.toThrow('FINAL_SCORE_MISMATCH');
+    },
+    120_000
+  );
 });

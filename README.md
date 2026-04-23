@@ -7,14 +7,14 @@ It combines:
 - anonymous eligibility proofs with Semaphore
 - tamper-evident audit logs and signed receipts
 - deterministic grading proofs for objective questions
-- blind marking workflows for subjective questions
+- Noir-backed blind-mark aggregation and final-grade composition proofs
 - late-stage grade claim so identity is reconnected only when results are finalized
 
 ## Known Limitations
 
-- Objective grading now runs through a real Noir circuit and Barretenberg CLI backend. The current circuit proves deterministic MCQ scoring over fixed-size hashed choice inputs; the worker still enforces answer-sheet, answer-key, and grading-policy commitments outside the circuit.
+- Grading now runs through a registry of real Noir circuits and a Barretenberg CLI backend. Current circuits cover fixed MCQ objective scoring, subjective blind-mark aggregation, and final grade composition.
 - Student claim still depends on the same browser-local Semaphore identity used during submission. Recovery is now available only if the student previously escrowed the encrypted recovery package and still knows the original wallet passphrase.
-- ProofMark should currently be described as providing verifiable workflow integrity, signed receipts, blind marking support, operator-approved wallet recovery, and Noir-backed objective grading proofs for the supported fixed MCQ circuit.
+- ProofMark should currently be described as providing verifiable workflow integrity, signed receipts, blind marking support, operator-approved wallet recovery, and Noir-backed grading proofs for objective scoring, subjective aggregation, and final score composition.
 
 ## What ProofMark Supports
 

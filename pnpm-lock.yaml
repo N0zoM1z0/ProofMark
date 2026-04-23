@@ -79,6 +79,9 @@ importers:
       '@proofmark/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@proofmark/zk-grading-noir':
+        specifier: workspace:*
+        version: link:../../packages/zk-grading-noir
       '@semaphore-protocol/group':
         specifier: ^4.14.2
         version: 4.14.2

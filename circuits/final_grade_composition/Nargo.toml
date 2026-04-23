@@ -1,0 +1,4 @@
+[package]
+name = "final_grade_composition"
+type = "bin"
+authors = ["ProofMark"]

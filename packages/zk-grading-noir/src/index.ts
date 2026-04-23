@@ -1,5 +1,8 @@
 import { canonicalJson, sha256Canonical, sha256Hex } from '@proofmark/crypto';
-import { type FixedMcqAnswerSheet } from '@proofmark/shared';
+import {
+  type BlindMarkingPolicy,
+  type FixedMcqAnswerSheet
+} from '@proofmark/shared';
 import { Noir } from '@noir-lang/noir_js';
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -14,16 +17,59 @@ export const zkGradingNoirPackageName = '@proofmark/zk-grading-noir';
 export const objectiveGradingCircuitName = 'fixed_mcq_grading';
 export const objectiveGradingCircuitVersion = 'noir-1.0.0-beta.20-bb-cli-v1';
 export const objectiveGradingMaxQuestions = 32;
+export const subjectiveAggregationCircuitName = 'subjective_aggregation';
+export const subjectiveAggregationCircuitVersion = 'noir-1.0.0-beta.20-bb-cli-v1';
+export const subjectiveAggregationMaxParts = 16;
+export const subjectiveAggregationMaxMarksPerPart = 5;
+export const finalGradeCompositionCircuitName = 'final_grade_composition';
+export const finalGradeCompositionCircuitVersion = 'noir-1.0.0-beta.20-bb-cli-v1';
+export const gradingScoreScale = 100;
 
 const require = createRequire(import.meta.url);
-const fixedMcqGradingCircuit = require('./artifacts/fixed_mcq_grading.json') as {
+type NoirCircuitArtifact = {
   bytecode: string;
   hash: number;
   noir_version: string;
 };
+const fixedMcqGradingCircuit = require('./artifacts/fixed_mcq_grading.json') as NoirCircuitArtifact;
+const subjectiveAggregationCircuit = require('./artifacts/subjective_aggregation.json') as NoirCircuitArtifact;
+const finalGradeCompositionCircuit = require('./artifacts/final_grade_composition.json') as NoirCircuitArtifact;
 const execFileAsync = promisify(execFile);
 const bn254ScalarField =
   21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+
+export type GradingProofType =
+  | 'final-grade-composition-proof'
+  | 'objective-grade-proof'
+  | 'subjective-aggregation-proof';
+
+export const gradingProofRegistry = {
+  finalGradeComposition: {
+    circuitHash: String(finalGradeCompositionCircuit.hash),
+    circuitName: finalGradeCompositionCircuitName,
+    circuitVersion: finalGradeCompositionCircuitVersion,
+    maxInputs: null,
+    noirVersion: finalGradeCompositionCircuit.noir_version,
+    proofType: 'final-grade-composition-proof' as const
+  },
+  objectiveMcq: {
+    circuitHash: String(fixedMcqGradingCircuit.hash),
+    circuitName: objectiveGradingCircuitName,
+    circuitVersion: objectiveGradingCircuitVersion,
+    maxQuestions: objectiveGradingMaxQuestions,
+    noirVersion: fixedMcqGradingCircuit.noir_version,
+    proofType: 'objective-grade-proof' as const
+  },
+  subjectiveAggregation: {
+    circuitHash: String(subjectiveAggregationCircuit.hash),
+    circuitName: subjectiveAggregationCircuitName,
+    circuitVersion: subjectiveAggregationCircuitVersion,
+    maxMarksPerPart: subjectiveAggregationMaxMarksPerPart,
+    maxParts: subjectiveAggregationMaxParts,
+    noirVersion: subjectiveAggregationCircuit.noir_version,
+    proofType: 'subjective-aggregation-proof' as const
+  }
+};
 
 export const objectiveGradingVerifierHash = `sha256:${sha256Canonical({
   backend: 'barretenberg-cli-ultra-honk',
@@ -95,11 +141,172 @@ type StoredProofEnvelope = {
   barretenberg: BarretenbergProofEnvelope;
   circuitName: string;
   circuitVersion: string;
-  publicInputs: ObjectiveGradePublicInputs;
+  publicInputs: Record<string, unknown>;
 };
+
+type BaseGradeProof<TPublicInputs extends Record<string, unknown>> = {
+  backend: 'barretenberg-cli';
+  circuitName: string;
+  circuitVersion: string;
+  proof: string;
+  proofHash: string;
+  publicInputs: TPublicInputs;
+  publicInputsHash: string;
+  verificationKeyHash: string;
+};
+
+export type SubjectiveAggregationPartInput = {
+  marks: Array<{
+    markerId: string;
+    score: number;
+  }>;
+  maxScore: number;
+  partCommitment: string;
+  partId: string;
+};
+
+export type SubjectiveAggregationPrivateInputs = {
+  parts: SubjectiveAggregationPartInput[];
+  policy: Pick<BlindMarkingPolicy, 'adjudicationDelta' | 'markersPerPart'>;
+};
+
+export type SubjectiveAggregationPublicInputs = {
+  aggregationInputHash: string;
+  adjudicationDelta: number;
+  circuitHash: string;
+  markersPerPart: number;
+  partCount: number;
+  scoreScale: number;
+  subjectiveMaxScore: number;
+  subjectiveScore: number;
+};
+
+export type SubjectiveAggregationProof =
+  BaseGradeProof<SubjectiveAggregationPublicInputs> & {
+    proofType: 'subjective-aggregation-proof';
+  };
+
+export type FinalGradeCompositionPublicInputs = {
+  circuitHash: string;
+  finalScore: number;
+  gradeCommitment: string | null;
+  maxScore: number;
+  objectiveMaxScore: number;
+  objectiveScore: number;
+  proofArtifactsRoot: string | null;
+  scoreScale: number;
+  subjectiveMaxScore: number;
+  subjectiveScore: number;
+};
+
+export type FinalGradeCompositionProof =
+  BaseGradeProof<FinalGradeCompositionPublicInputs> & {
+    proofType: 'final-grade-composition-proof';
+  };
 
 function normalizeHash(value: string) {
   return value.startsWith('sha256:') ? value : `sha256:${value}`;
+}
+
+function toScaledScore(value: number, fieldName: string) {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${fieldName.toUpperCase()}_INVALID`);
+  }
+
+  return Math.round(value * gradingScoreScale);
+}
+
+function fromScaledScore(value: number) {
+  return value / gradingScoreScale;
+}
+
+function roundedAverageScaled(scores: number[]) {
+  if (scores.length === 0) {
+    throw new Error('AVERAGE_REQUIRES_SCORES');
+  }
+
+  const sum = scores.reduce((total, score) => total + score, 0);
+
+  return Math.floor((sum + Math.floor(scores.length / 2)) / scores.length);
+}
+
+function decodeStoredProofEnvelope(proof: string) {
+  return JSON.parse(Buffer.from(proof, 'base64').toString('utf8')) as
+    StoredProofEnvelope;
+}
+
+function computeProofEnvelopeHashes(params: {
+  barretenberg: BarretenbergProofEnvelope;
+  proof: string;
+  publicInputs: Record<string, unknown>;
+}) {
+  return {
+    proofHash: `sha256:${sha256Hex(Buffer.from(params.proof, 'base64'))}`,
+    publicInputsHash: `sha256:${sha256Canonical({
+      circuitPublicInputs: params.barretenberg.publicInputs,
+      proofmarkPublicInputs: params.publicInputs
+    })}`,
+    verificationKeyHash: `sha256:${sha256Canonical(
+      params.barretenberg.verificationKey
+    )}`
+  };
+}
+
+function buildStoredProof(params: {
+  barretenberg: BarretenbergProofEnvelope;
+  circuitName: string;
+  circuitVersion: string;
+  publicInputs: Record<string, unknown>;
+}) {
+  const proofEnvelope = {
+    barretenberg: params.barretenberg,
+    circuitName: params.circuitName,
+    circuitVersion: params.circuitVersion,
+    publicInputs: params.publicInputs
+  };
+  const proof = Buffer.from(canonicalJson(proofEnvelope), 'utf8').toString(
+    'base64'
+  );
+
+  return {
+    ...computeProofEnvelopeHashes({
+      barretenberg: params.barretenberg,
+      proof,
+      publicInputs: params.publicInputs
+    }),
+    proof
+  };
+}
+
+async function verifyStoredProof(params: {
+  circuitName: string;
+  circuitVersion: string;
+  proof: string;
+  proofHash: string;
+  publicInputs: Record<string, unknown>;
+  publicInputsHash: string;
+  verificationKeyHash: string;
+}) {
+  const decodedEnvelope = decodeStoredProofEnvelope(params.proof);
+  const hashes = computeProofEnvelopeHashes({
+    barretenberg: decodedEnvelope.barretenberg,
+    proof: params.proof,
+    publicInputs: decodedEnvelope.publicInputs
+  });
+  const barretenbergVerified = await verifyBarretenbergProof(
+    decodedEnvelope.barretenberg
+  );
+
+  return (
+    barretenbergVerified &&
+    decodedEnvelope.circuitName === params.circuitName &&
+    decodedEnvelope.circuitVersion === params.circuitVersion &&
+    canonicalJson(decodedEnvelope.publicInputs) ===
+      canonicalJson(params.publicInputs) &&
+    hashes.proofHash === params.proofHash &&
+    hashes.publicInputsHash === params.publicInputsHash &&
+    hashes.verificationKeyHash === params.verificationKeyHash
+  );
 }
 
 function computeAnswerCommitment(params: {
@@ -249,6 +456,8 @@ async function runBarretenberg(
 }
 
 async function generateBarretenbergProof(params: {
+  circuit: NoirCircuitArtifact;
+  circuitName: string;
   circuitInputs: Record<string, unknown>;
 }) {
   const workdir = await mkdtemp(
@@ -256,13 +465,13 @@ async function generateBarretenbergProof(params: {
   );
 
   try {
-    const circuitPath = join(workdir, 'fixed_mcq_grading.json');
+    const circuitPath = join(workdir, `${params.circuitName}.json`);
     const witnessPath = join(workdir, 'witness.gz');
     const outputDir = join(workdir, 'proof');
-    const noir = new Noir(fixedMcqGradingCircuit as never);
+    const noir = new Noir(params.circuit as never);
     const { witness } = await noir.execute(params.circuitInputs as never);
 
-    await writeFile(circuitPath, JSON.stringify(fixedMcqGradingCircuit));
+    await writeFile(circuitPath, JSON.stringify(params.circuit));
     await writeFile(witnessPath, Buffer.from(witness));
     await runBarretenberg(
       [
@@ -429,6 +638,8 @@ export async function generateObjectiveGradeProof(params: {
     score: computedScore.score
   };
   const barretenbergProof = await generateBarretenbergProof({
+    circuit: fixedMcqGradingCircuit,
+    circuitName: objectiveGradingCircuitName,
     circuitInputs: createCircuitInputs({
       answerKey: params.privateInputs.answerKey,
       answerSheet: params.privateInputs.answerSheet,
@@ -436,31 +647,22 @@ export async function generateObjectiveGradeProof(params: {
       score: computedScore.score
     })
   });
-  const proofEnvelope = {
+  const storedProof = buildStoredProof({
     barretenberg: barretenbergProof,
     circuitName: objectiveGradingCircuitName,
     circuitVersion: objectiveGradingCircuitVersion,
     publicInputs
-  };
-  const proof = Buffer.from(canonicalJson(proofEnvelope), 'utf8').toString(
-    'base64'
-  );
-  const proofHash = `sha256:${sha256Hex(Buffer.from(proof, 'base64'))}`;
+  });
 
   return {
     backend: 'barretenberg-cli',
     circuitName: objectiveGradingCircuitName,
     circuitVersion: objectiveGradingCircuitVersion,
-    proof,
-    proofHash,
+    proof: storedProof.proof,
+    proofHash: storedProof.proofHash,
     publicInputs,
-    publicInputsHash: `sha256:${sha256Canonical({
-      circuitPublicInputs: barretenbergProof.publicInputs,
-      proofmarkPublicInputs: publicInputs
-    })}`,
-    verificationKeyHash: `sha256:${sha256Canonical(
-      barretenbergProof.verificationKey
-    )}`
+    publicInputsHash: storedProof.publicInputsHash,
+    verificationKeyHash: storedProof.verificationKeyHash
   } satisfies ObjectiveGradeProof;
 }
 
@@ -484,40 +686,408 @@ export async function verifyObjectiveGradeProof(params: {
     privateInputs: params.privateInputs,
     score: params.proof.publicInputs.score
   });
-  const decodedEnvelope = JSON.parse(
-    Buffer.from(params.proof.proof, 'base64').toString('utf8')
-  ) as StoredProofEnvelope;
-  const decodedPublicInputsHash = `sha256:${sha256Canonical({
-    circuitPublicInputs: decodedEnvelope.barretenberg.publicInputs,
-    proofmarkPublicInputs: decodedEnvelope.publicInputs
-  })}`;
-  const decodedVerificationKeyHash = `sha256:${sha256Canonical(
-    decodedEnvelope.barretenberg.verificationKey
-  )}`;
-  const proofHash = `sha256:${sha256Hex(
-    Buffer.from(params.proof.proof, 'base64')
-  )}`;
-  const barretenbergVerified = await verifyBarretenbergProof(
-    decodedEnvelope.barretenberg
-  );
+  const storedProofVerified = await verifyStoredProof({
+    circuitName: objectiveGradingCircuitName,
+    circuitVersion: objectiveGradingCircuitVersion,
+    proof: params.proof.proof,
+    proofHash: params.proof.proofHash,
+    publicInputs: params.proof.publicInputs,
+    publicInputsHash: params.proof.publicInputsHash,
+    verificationKeyHash: params.proof.verificationKeyHash
+  });
 
   return {
     maxScore: computedScore.maxScore,
     publicInputsHash: params.proof.publicInputsHash,
     score: computedScore.score,
     verified:
-      barretenbergVerified &&
-      decodedEnvelope.circuitName === params.proof.circuitName &&
-      decodedEnvelope.circuitVersion === params.proof.circuitVersion &&
-      decodedEnvelope.circuitName === objectiveGradingCircuitName &&
-      decodedEnvelope.circuitVersion === objectiveGradingCircuitVersion &&
-      decodedEnvelope.publicInputs.circuitHash === params.proof.publicInputs.circuitHash &&
-      canonicalJson(decodedEnvelope.publicInputs) ===
-        canonicalJson(params.proof.publicInputs) &&
-      proofHash === params.proof.proofHash &&
-      decodedPublicInputsHash === params.proof.publicInputsHash &&
-      decodedVerificationKeyHash === params.proof.verificationKeyHash
+      storedProofVerified &&
+      params.proof.circuitName === objectiveGradingCircuitName &&
+      params.proof.circuitVersion === objectiveGradingCircuitVersion &&
+      params.proof.publicInputs.circuitHash ===
+        String(fixedMcqGradingCircuit.hash)
   } satisfies ObjectiveGradeVerificationResult;
+}
+
+function computeSubjectiveAggregationInputHash(
+  privateInputs: SubjectiveAggregationPrivateInputs
+) {
+  return `sha256:${sha256Canonical({
+    parts: privateInputs.parts.map((part) => ({
+      marks: part.marks.map((mark) => ({
+        markerId: mark.markerId,
+        score: mark.score
+      })),
+      maxScore: part.maxScore,
+      partCommitment: normalizeHash(part.partCommitment),
+      partId: part.partId
+    })),
+    policy: privateInputs.policy,
+    scoreScale: gradingScoreScale,
+    version: 'proofmark-subjective-aggregation-input-v1'
+  })}`;
+}
+
+export function evaluateSubjectiveAggregationForProof(
+  privateInputs: SubjectiveAggregationPrivateInputs
+) {
+  if (privateInputs.parts.length > subjectiveAggregationMaxParts) {
+    throw new Error('SUBJECTIVE_AGGREGATION_TOO_MANY_PARTS');
+  }
+
+  if (
+    privateInputs.policy.markersPerPart < 1 ||
+    privateInputs.policy.markersPerPart > subjectiveAggregationMaxMarksPerPart
+  ) {
+    throw new Error('SUBJECTIVE_AGGREGATION_MARKERS_PER_PART_INVALID');
+  }
+
+  const adjudicationDeltaScaled = toScaledScore(
+    privateInputs.policy.adjudicationDelta,
+    'adjudicationDelta'
+  );
+  const parts = privateInputs.parts.map((part) => {
+    if (part.marks.length < privateInputs.policy.markersPerPart) {
+      throw new Error('SUBJECTIVE_AGGREGATION_INSUFFICIENT_MARKS');
+    }
+
+    if (part.marks.length > subjectiveAggregationMaxMarksPerPart) {
+      throw new Error('SUBJECTIVE_AGGREGATION_TOO_MANY_MARKS');
+    }
+
+    const maxScoreScaled = toScaledScore(part.maxScore, 'maxScore');
+    const markScoresScaled = part.marks.map((mark) => {
+      const scaledScore = toScaledScore(mark.score, 'score');
+
+      if (scaledScore > maxScoreScaled) {
+        throw new Error('SUBJECTIVE_AGGREGATION_SCORE_OUT_OF_RANGE');
+      }
+
+      return scaledScore;
+    });
+    const baselineScores = markScoresScaled.slice(
+      0,
+      privateInputs.policy.markersPerPart
+    );
+    const baselineDelta =
+      Math.max(...baselineScores) - Math.min(...baselineScores);
+    const adjudicated = baselineDelta > adjudicationDeltaScaled;
+
+    if (adjudicated && markScoresScaled.length <= privateInputs.policy.markersPerPart) {
+      throw new Error('SUBJECTIVE_AGGREGATION_ADJUDICATION_MARK_REQUIRED');
+    }
+
+    const scoringScores = adjudicated ? markScoresScaled : baselineScores;
+    const scoreScaled = roundedAverageScaled(scoringScores);
+
+    return {
+      adjudicated,
+      maxScore: part.maxScore,
+      maxScoreScaled,
+      markScoresScaled,
+      partCommitment: normalizeHash(part.partCommitment),
+      partId: part.partId,
+      score: fromScaledScore(scoreScaled),
+      scoreScaled
+    };
+  });
+  const subjectiveScoreScaled = parts.reduce(
+    (total, part) => total + part.scoreScaled,
+    0
+  );
+  const subjectiveMaxScoreScaled = parts.reduce(
+    (total, part) => total + part.maxScoreScaled,
+    0
+  );
+
+  return {
+    aggregationInputHash: computeSubjectiveAggregationInputHash(privateInputs),
+    adjudicationDelta: privateInputs.policy.adjudicationDelta,
+    adjudicationDeltaScaled,
+    markersPerPart: privateInputs.policy.markersPerPart,
+    partCount: privateInputs.parts.length,
+    parts,
+    subjectiveMaxScore: fromScaledScore(subjectiveMaxScoreScaled),
+    subjectiveMaxScoreScaled,
+    subjectiveScore: fromScaledScore(subjectiveScoreScaled),
+    subjectiveScoreScaled
+  };
+}
+
+function createSubjectiveAggregationCircuitInputs(
+  privateInputs: SubjectiveAggregationPrivateInputs,
+  evaluation: ReturnType<typeof evaluateSubjectiveAggregationForProof>
+) {
+  const scoresScaled = Array.from(
+    {
+      length:
+        subjectiveAggregationMaxParts * subjectiveAggregationMaxMarksPerPart
+    },
+    () => '0'
+  );
+  const markCounts = Array.from(
+    { length: subjectiveAggregationMaxParts },
+    () => '0'
+  );
+  const partMaxScoresScaled = Array.from(
+    { length: subjectiveAggregationMaxParts },
+    () => '0'
+  );
+  const partScoresScaled = Array.from(
+    { length: subjectiveAggregationMaxParts },
+    () => '0'
+  );
+
+  evaluation.parts.forEach((part, partIndex) => {
+    markCounts[partIndex] = String(part.markScoresScaled.length);
+    partMaxScoresScaled[partIndex] = String(part.maxScoreScaled);
+    partScoresScaled[partIndex] = String(part.scoreScaled);
+
+    part.markScoresScaled.forEach((score, markIndex) => {
+      scoresScaled[
+        partIndex * subjectiveAggregationMaxMarksPerPart + markIndex
+      ] = String(score);
+    });
+  });
+
+  void privateInputs;
+
+  return {
+    adjudication_delta_scaled: String(evaluation.adjudicationDeltaScaled),
+    mark_counts: markCounts,
+    markers_per_part: String(evaluation.markersPerPart),
+    part_count: String(evaluation.partCount),
+    part_max_scores_scaled: partMaxScoresScaled,
+    part_scores_scaled: partScoresScaled,
+    scores_scaled: scoresScaled,
+    subjective_max_score_scaled: String(evaluation.subjectiveMaxScoreScaled),
+    subjective_score_scaled: String(evaluation.subjectiveScoreScaled)
+  };
+}
+
+export async function generateSubjectiveAggregationProof(params: {
+  privateInputs: SubjectiveAggregationPrivateInputs;
+}) {
+  const evaluation = evaluateSubjectiveAggregationForProof(params.privateInputs);
+  const publicInputs: SubjectiveAggregationPublicInputs = {
+    aggregationInputHash: evaluation.aggregationInputHash,
+    adjudicationDelta: evaluation.adjudicationDelta,
+    circuitHash: String(subjectiveAggregationCircuit.hash),
+    markersPerPart: evaluation.markersPerPart,
+    partCount: evaluation.partCount,
+    scoreScale: gradingScoreScale,
+    subjectiveMaxScore: evaluation.subjectiveMaxScore,
+    subjectiveScore: evaluation.subjectiveScore
+  };
+  const barretenbergProof = await generateBarretenbergProof({
+    circuit: subjectiveAggregationCircuit,
+    circuitName: subjectiveAggregationCircuitName,
+    circuitInputs: createSubjectiveAggregationCircuitInputs(
+      params.privateInputs,
+      evaluation
+    )
+  });
+  const storedProof = buildStoredProof({
+    barretenberg: barretenbergProof,
+    circuitName: subjectiveAggregationCircuitName,
+    circuitVersion: subjectiveAggregationCircuitVersion,
+    publicInputs
+  });
+
+  return {
+    backend: 'barretenberg-cli',
+    circuitName: subjectiveAggregationCircuitName,
+    circuitVersion: subjectiveAggregationCircuitVersion,
+    proof: storedProof.proof,
+    proofHash: storedProof.proofHash,
+    proofType: 'subjective-aggregation-proof',
+    publicInputs,
+    publicInputsHash: storedProof.publicInputsHash,
+    verificationKeyHash: storedProof.verificationKeyHash
+  } satisfies SubjectiveAggregationProof;
+}
+
+export async function verifySubjectiveAggregationProof(params: {
+  privateInputs: SubjectiveAggregationPrivateInputs;
+  proof: SubjectiveAggregationProof;
+}) {
+  const evaluation = evaluateSubjectiveAggregationForProof(params.privateInputs);
+  const expectedPublicInputs: SubjectiveAggregationPublicInputs = {
+    aggregationInputHash: evaluation.aggregationInputHash,
+    adjudicationDelta: evaluation.adjudicationDelta,
+    circuitHash: String(subjectiveAggregationCircuit.hash),
+    markersPerPart: evaluation.markersPerPart,
+    partCount: evaluation.partCount,
+    scoreScale: gradingScoreScale,
+    subjectiveMaxScore: evaluation.subjectiveMaxScore,
+    subjectiveScore: evaluation.subjectiveScore
+  };
+
+  return {
+    publicInputsHash: params.proof.publicInputsHash,
+    subjectiveMaxScore: expectedPublicInputs.subjectiveMaxScore,
+    subjectiveScore: expectedPublicInputs.subjectiveScore,
+    verified:
+      params.proof.backend === 'barretenberg-cli' &&
+      params.proof.proofType === 'subjective-aggregation-proof' &&
+      params.proof.circuitName === subjectiveAggregationCircuitName &&
+      params.proof.circuitVersion === subjectiveAggregationCircuitVersion &&
+      canonicalJson(params.proof.publicInputs) ===
+        canonicalJson(expectedPublicInputs) &&
+      (await verifyStoredProof({
+        circuitName: subjectiveAggregationCircuitName,
+        circuitVersion: subjectiveAggregationCircuitVersion,
+        proof: params.proof.proof,
+        proofHash: params.proof.proofHash,
+        publicInputs: params.proof.publicInputs,
+        publicInputsHash: params.proof.publicInputsHash,
+        verificationKeyHash: params.proof.verificationKeyHash
+      }))
+  };
+}
+
+function computeGradeCommitment(params: {
+  finalScore: number;
+  maxScore: number;
+  objectiveScore: number;
+  subjectiveScore: number;
+  submissionId: string;
+}) {
+  return `sha256:${sha256Hex(
+    canonicalJson({
+      finalScore: params.finalScore,
+      maxScore: params.maxScore,
+      objectiveScore: params.objectiveScore,
+      subjectiveScore: params.subjectiveScore,
+      submissionId: params.submissionId,
+      version: 'proofmark-grade-commitment-v3'
+    })
+  )}`;
+}
+
+export function createFinalGradeCommitment(params: {
+  finalScore: number;
+  maxScore: number;
+  objectiveScore: number;
+  subjectiveScore: number;
+  submissionId: string;
+}) {
+  return computeGradeCommitment(params);
+}
+
+export async function generateFinalGradeCompositionProof(params: {
+  finalScore?: number;
+  gradeCommitment?: string | null;
+  maxScore?: number;
+  objectiveMaxScore: number;
+  objectiveScore: number;
+  proofArtifactsRoot?: string | null;
+  subjectiveMaxScore: number;
+  subjectiveScore: number;
+  submissionId?: string;
+}) {
+  const finalScore = params.finalScore ?? params.objectiveScore + params.subjectiveScore;
+  const maxScore = params.maxScore ?? params.objectiveMaxScore + params.subjectiveMaxScore;
+
+  if (toScaledScore(finalScore, 'finalScore') !==
+    toScaledScore(params.objectiveScore, 'objectiveScore') +
+      toScaledScore(params.subjectiveScore, 'subjectiveScore')) {
+    throw new Error('FINAL_SCORE_MISMATCH');
+  }
+
+  if (toScaledScore(maxScore, 'maxScore') !==
+    toScaledScore(params.objectiveMaxScore, 'objectiveMaxScore') +
+      toScaledScore(params.subjectiveMaxScore, 'subjectiveMaxScore')) {
+    throw new Error('FINAL_MAX_SCORE_MISMATCH');
+  }
+
+  const gradeCommitment =
+    params.gradeCommitment ??
+    (params.submissionId
+      ? computeGradeCommitment({
+          finalScore,
+          maxScore,
+          objectiveScore: params.objectiveScore,
+          subjectiveScore: params.subjectiveScore,
+          submissionId: params.submissionId
+        })
+      : null);
+  const publicInputs: FinalGradeCompositionPublicInputs = {
+    circuitHash: String(finalGradeCompositionCircuit.hash),
+    finalScore,
+    gradeCommitment,
+    maxScore,
+    objectiveMaxScore: params.objectiveMaxScore,
+    objectiveScore: params.objectiveScore,
+    proofArtifactsRoot: params.proofArtifactsRoot ?? null,
+    scoreScale: gradingScoreScale,
+    subjectiveMaxScore: params.subjectiveMaxScore,
+    subjectiveScore: params.subjectiveScore
+  };
+  const barretenbergProof = await generateBarretenbergProof({
+    circuit: finalGradeCompositionCircuit,
+    circuitName: finalGradeCompositionCircuitName,
+    circuitInputs: {
+      final_score_scaled: String(toScaledScore(finalScore, 'finalScore')),
+      max_score_scaled: String(toScaledScore(maxScore, 'maxScore')),
+      objective_max_score_scaled: String(
+        toScaledScore(params.objectiveMaxScore, 'objectiveMaxScore')
+      ),
+      objective_score_scaled: String(
+        toScaledScore(params.objectiveScore, 'objectiveScore')
+      ),
+      subjective_max_score_scaled: String(
+        toScaledScore(params.subjectiveMaxScore, 'subjectiveMaxScore')
+      ),
+      subjective_score_scaled: String(
+        toScaledScore(params.subjectiveScore, 'subjectiveScore')
+      )
+    }
+  });
+  const storedProof = buildStoredProof({
+    barretenberg: barretenbergProof,
+    circuitName: finalGradeCompositionCircuitName,
+    circuitVersion: finalGradeCompositionCircuitVersion,
+    publicInputs
+  });
+
+  return {
+    backend: 'barretenberg-cli',
+    circuitName: finalGradeCompositionCircuitName,
+    circuitVersion: finalGradeCompositionCircuitVersion,
+    proof: storedProof.proof,
+    proofHash: storedProof.proofHash,
+    proofType: 'final-grade-composition-proof',
+    publicInputs,
+    publicInputsHash: storedProof.publicInputsHash,
+    verificationKeyHash: storedProof.verificationKeyHash
+  } satisfies FinalGradeCompositionProof;
+}
+
+export async function verifyFinalGradeCompositionProof(params: {
+  proof: FinalGradeCompositionProof;
+}) {
+  return {
+    finalScore: params.proof.publicInputs.finalScore,
+    maxScore: params.proof.publicInputs.maxScore,
+    publicInputsHash: params.proof.publicInputsHash,
+    verified:
+      params.proof.backend === 'barretenberg-cli' &&
+      params.proof.proofType === 'final-grade-composition-proof' &&
+      params.proof.circuitName === finalGradeCompositionCircuitName &&
+      params.proof.circuitVersion === finalGradeCompositionCircuitVersion &&
+      params.proof.publicInputs.circuitHash ===
+        String(finalGradeCompositionCircuit.hash) &&
+      (await verifyStoredProof({
+        circuitName: finalGradeCompositionCircuitName,
+        circuitVersion: finalGradeCompositionCircuitVersion,
+        proof: params.proof.proof,
+        proofHash: params.proof.proofHash,
+        publicInputs: params.proof.publicInputs,
+        publicInputsHash: params.proof.publicInputsHash,
+        verificationKeyHash: params.proof.verificationKeyHash
+      }))
+  };
 }
 
 export async function ensureBarretenbergAvailable() {

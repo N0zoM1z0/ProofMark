@@ -8,7 +8,10 @@ import {
 } from '@prisma/client';
 import { canonicalJson, sha256Hex } from '@proofmark/crypto';
 import {
+  createFinalGradeCommitment,
+  generateFinalGradeCompositionProof,
   generateObjectiveGradeProof,
+  verifyFinalGradeCompositionProof,
   verifyObjectiveGradeProof,
   type FixedMcqAnswerKey,
   type FixedMcqGradingPolicy
@@ -63,8 +66,32 @@ function actorPseudonym(examId: string, submissionId: string) {
   return sha256Hex(`worker:${examId}:${submissionId}`).slice(0, 16);
 }
 
+function buildProofArtifactsRoot(params: {
+  proofHashes: string[];
+  submissionId: string;
+}) {
+  return `sha256:${sha256Hex(
+    canonicalJson({
+      proofHashes: [...params.proofHashes].sort(),
+      submissionId: params.submissionId,
+      version: 'proofmark-proof-artifacts-root-v1'
+    })
+  )}`;
+}
+
 function toNumber(value: unknown) {
   return value === null || value === undefined ? 0 : Number(value);
+}
+
+function hasSubjectiveQuestions(questionSetData: unknown) {
+  return (
+    Object.prototype.toString.call(questionSetData) === '[object Object]' &&
+    Array.isArray(
+      (questionSetData as { subjectiveQuestions?: unknown }).subjectiveQuestions
+    ) &&
+    ((questionSetData as { subjectiveQuestions: unknown[] }).subjectiveQuestions)
+      .length > 0
+  );
 }
 
 export function createWorkerStatus() {
@@ -177,6 +204,79 @@ export class ObjectiveGradingWorker {
       throw new Error('OBJECTIVE_GRADE_PROOF_INVALID');
     }
 
+    const existingGradeForComposition = await this.prisma.grade.findFirst({
+      where: {
+        examId: submission.examId,
+        status: {
+          in: [GradeStatus.DRAFT, GradeStatus.VERIFIED]
+        },
+        submissionId: submission.id
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+    const subjectiveScore = toNumber(existingGradeForComposition?.subjectiveScore);
+    const subjectiveMaxScore = existingGradeForComposition
+      ? Math.max(
+          toNumber(existingGradeForComposition.maxScore) -
+            toNumber(existingGradeForComposition.objectiveScore),
+          0
+        )
+      : 0;
+    const finalScore = proof.publicInputs.score + subjectiveScore;
+    const maxScore = proof.publicInputs.maxScore + subjectiveMaxScore;
+    const existingCompositionInputArtifacts =
+      await this.prisma.proofArtifact.findMany({
+        where: {
+          submissionId: submission.id,
+          type: {
+            not: 'final-grade-composition-proof'
+          },
+          verificationStatus: ProofVerificationStatus.VERIFIED
+        },
+        select: {
+          proofHash: true
+        }
+      });
+    const proofArtifactsRoot = buildProofArtifactsRoot({
+      proofHashes: [
+        ...existingCompositionInputArtifacts.map((artifact) => artifact.proofHash),
+        proof.proofHash
+      ],
+      submissionId: submission.id
+    });
+    const gradeCommitment = createFinalGradeCommitment({
+      finalScore,
+      maxScore,
+      objectiveScore: proof.publicInputs.score,
+      subjectiveScore,
+      submissionId: submission.id
+    });
+    const shouldGenerateFinalProof =
+      !hasSubjectiveQuestions(latestVersion.questionSetData) || subjectiveScore > 0;
+    const finalProof = shouldGenerateFinalProof
+      ? await generateFinalGradeCompositionProof({
+          finalScore,
+          gradeCommitment,
+          maxScore,
+          objectiveMaxScore: proof.publicInputs.maxScore,
+          objectiveScore: proof.publicInputs.score,
+          proofArtifactsRoot,
+          subjectiveMaxScore,
+          subjectiveScore
+        })
+      : null;
+    const finalVerification = finalProof
+      ? await verifyFinalGradeCompositionProof({
+          proof: finalProof
+        })
+      : null;
+
+    if (finalVerification && !finalVerification.verified) {
+      throw new Error('FINAL_GRADE_COMPOSITION_PROOF_INVALID');
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const previousAuditEvent = await tx.auditEvent.findFirst({
         where: {
@@ -237,6 +337,21 @@ export class ObjectiveGradingWorker {
           vkHash: proof.verificationKeyHash
         }
       });
+      const finalProofArtifact = finalProof
+        ? await tx.proofArtifact.create({
+            data: {
+              circuitName: finalProof.circuitName,
+              circuitVersion: finalProof.circuitVersion,
+              examId: submission.examId,
+              proofHash: finalProof.proofHash,
+              publicInputsHash: finalProof.publicInputsHash,
+              submissionId: submission.id,
+              type: 'final-grade-composition-proof',
+              verificationStatus: ProofVerificationStatus.VERIFIED,
+              vkHash: finalProof.verificationKeyHash
+            }
+          })
+        : null;
       const existingGrade = await tx.grade.findFirst({
         where: {
           examId: submission.examId,
@@ -256,24 +371,11 @@ export class ObjectiveGradingWorker {
             },
             data: {
               auditEventId: auditEvent.id,
-              finalScore:
-                proof.publicInputs.score + toNumber(existingGrade.subjectiveScore),
-              gradeCommitment: `sha256:${sha256Hex(
-                canonicalJson({
-                  objectiveScore: proof.publicInputs.score,
-                  subjectiveScore: toNumber(existingGrade.subjectiveScore),
-                  submissionId: submission.id,
-                  version: 'proofmark-grade-commitment-v2'
-                })
-              )}`,
-              maxScore:
-                proof.publicInputs.maxScore +
-                Math.max(
-                  toNumber(existingGrade.maxScore) - toNumber(existingGrade.objectiveScore),
-                  0
-                ),
+              finalScore,
+              gradeCommitment,
+              maxScore,
               objectiveScore: proof.publicInputs.score,
-              proofArtifactsRoot: proof.proofHash,
+              proofArtifactsRoot,
               status: GradeStatus.VERIFIED
             }
           })
@@ -281,17 +383,11 @@ export class ObjectiveGradingWorker {
             data: {
               auditEventId: auditEvent.id,
               examId: submission.examId,
-              finalScore: proof.publicInputs.score,
-              gradeCommitment: `sha256:${sha256Hex(
-                canonicalJson({
-                  maxScore: proof.publicInputs.maxScore,
-                  score: proof.publicInputs.score,
-                  submissionId: submission.id
-                })
-              )}`,
-              maxScore: proof.publicInputs.maxScore,
+              finalScore,
+              gradeCommitment,
+              maxScore,
               objectiveScore: proof.publicInputs.score,
-              proofArtifactsRoot: proof.proofHash,
+              proofArtifactsRoot,
               status: GradeStatus.VERIFIED,
               submissionId: submission.id
             }
@@ -301,6 +397,7 @@ export class ObjectiveGradingWorker {
         auditEventId: auditEvent.id,
         gradeId: grade.id,
         maxScore: proof.publicInputs.maxScore,
+        finalProofArtifactId: finalProofArtifact?.id ?? null,
         proofArtifactId: proofArtifact.id,
         score: proof.publicInputs.score,
         submissionId: submission.id

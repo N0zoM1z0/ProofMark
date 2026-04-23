@@ -4,7 +4,7 @@ This document is the canonical operational reference for running a full ProofMar
 
 ## Current Release Caveats
 
-- Objective grading proof artifacts now use the fixed MCQ Noir circuit and Barretenberg CLI. The circuit proves score computation over hashed choice inputs; the worker checks the external ProofMark commitments.
+- Grading proof artifacts now use a Noir/Barretenberg proof registry. Current circuits prove fixed MCQ objective scoring, subjective blind-mark aggregation, and final grade composition; TypeScript services still check external ProofMark commitments and marker signatures.
 - Students must preserve the browser-local Semaphore identity until claim is complete. Recovery before `CLAIMING` now depends on an earlier escrowed recovery package plus the original wallet passphrase.
 
 ## 1. Purpose
@@ -313,7 +313,7 @@ Result:
 - if scores differ beyond policy threshold, adjudication can be triggered
 - once all subjective parts are resolved, the exam moves forward
 
-## Step G. Objective grading proof
+## Step G. Grading proofs
 
 Worker is run against the exam after submissions are closed.
 
@@ -323,14 +323,21 @@ Worker:
 2. decrypts them
 3. reconstructs deterministic grading inputs
 4. computes objective score
-5. generates the proof artifact
-6. verifies the proof artifact
-7. updates the grade row
+5. generates the objective proof artifact
+6. verifies the objective proof artifact
+7. updates objective grade data
+
+When subjective marking is present, the marking service also:
+
+1. proves blind-mark score aggregation after all subjective parts are resolved
+2. stores a `subjective-aggregation-proof`
+3. combines objective and subjective scores in a `final-grade-composition-proof`
+4. writes the proof-artifact root and final grade commitment
 
 Result:
 
-- proof artifact is visible to auditors
-- objective grading is independently checkable
+- proof artifacts are visible to auditors
+- objective scoring, subjective aggregation, and final score composition are independently checkable
 
 ## Step H. Finalization
 
