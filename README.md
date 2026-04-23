@@ -12,16 +12,16 @@ It combines:
 
 ## Known Limitations
 
-- Objective proof artifacts currently run through a development placeholder backend in [`@proofmark/zk-grading-noir`](packages/zk-grading-noir/src/index.ts). The worker, proof artifact persistence, and public verification flow are live, but the production `Noir/Barretenberg` grading circuit is not yet integrated.
-- Student claim still depends on the same browser-local Semaphore identity used during submission. If a student loses browser storage before `CLAIMING` and has no exported encrypted wallet backup, recovery is not yet supported in the current release.
-- Because of the two points above, ProofMark should currently be described as providing verifiable workflow integrity, signed receipts, and blind marking support, but not yet production objective ZK grading proofs or production-grade claim recovery.
+- Objective grading now runs through a real Noir circuit and Barretenberg CLI backend. The current circuit proves deterministic MCQ scoring over fixed-size hashed choice inputs; the worker still enforces answer-sheet, answer-key, and grading-policy commitments outside the circuit.
+- Student claim still depends on the same browser-local Semaphore identity used during submission. Recovery is now available only if the student previously escrowed the encrypted recovery package and still knows the original wallet passphrase.
+- ProofMark should currently be described as providing verifiable workflow integrity, signed receipts, blind marking support, operator-approved wallet recovery, and Noir-backed objective grading proofs for the supported fixed MCQ circuit.
 
 ## What ProofMark Supports
 
 - Teacher-facing exam authoring in `/admin`
 - JSON, Markdown, and CSV exam import with preview before persistence
 - Reusable exam templates and a shared question bank
-- Browser-local student identity wallets with encrypted backup and restore
+- Browser-local student identity wallets with encrypted backup, escrowed recovery packages, and restore
 - Anonymous exam submission with nullifier-based double-submit protection
 - Signed receipts with local and server-side verification
 - Public manifests, audit root history, and proof artifact inspection
@@ -115,9 +115,9 @@ Before a production-style rollout, read the go/no-go guidance in [docs/runbooks.
 ## User-Facing Routes
 
 - `/admin` for exam authoring, import preview, template reuse, question-bank reuse, exam export, and lifecycle actions
-- `/student/register` for local identity creation, encrypted backup export/import, and commitment registration
+- `/student/register` for local identity creation, encrypted backup export/import, commitment registration, and recovery-package escrow
 - `/student/exam` for loading the public exam, restoring the wallet, encrypting responses, generating the proof, and submitting anonymously
-- `/student/claim` for claiming a finalized result with the same local identity and receipt
+- `/student/claim` for claiming a finalized result, requesting wallet recovery, and restoring an approved encrypted wallet package
 - `/verify-receipt` for in-browser receipt verification
 - `/auditor` for manifest inspection, audit root history, proof artifact metadata, and stored receipt verification
 - `/marker` for blinded task review, local key storage, and signed mark submission
@@ -135,9 +135,17 @@ Before a production-style rollout, read the go/no-go guidance in [docs/runbooks.
 - `POST /api/admin/exams/:examId/assignments`
 - `GET /api/admin/exams`
 - `GET /api/admin/exams/:examId/export`
+- `GET /api/admin/exams/:examId/recovery-requests`
+- `POST /api/admin/exams/:examId/recovery-requests/:requestId/approve`
+- `POST /api/admin/exams/:examId/recovery-requests/:requestId/reject`
 - `POST /api/admin/imports/preview`
 - `GET/POST /api/admin/templates`
 - `GET/POST /api/admin/question-bank`
+- `GET /api/student/exams/:examId/recovery-package`
+- `POST /api/student/exams/:examId/recovery-package`
+- `GET /api/student/exams/:examId/recovery-requests`
+- `POST /api/student/exams/:examId/recovery-requests`
+- `POST /api/student/exams/:examId/recovery-requests/:requestId/restore`
 - `GET /api/marker/exams`
 - `GET /api/marker/exams/:examId/tasks`
 - `GET /api/marker/tasks/:taskId`
@@ -160,6 +168,7 @@ Operationally important variables:
 - `RECEIPT_SIGNING_KEY` for stable receipt signatures
 - `ADMIN_IDS` and `ADMIN_MFA_SECRET` for admin mutation authorization
 - `LOG_REDACTION_SALT` for privacy-safe principal hashing in logs
+- `BARRETENBERG_BINARY` or `BB_BINARY` when `bb` is not available at `$HOME/.bb/bb` or on `PATH`
 
 ## Documentation
 
@@ -168,5 +177,6 @@ Operationally important variables:
 - [docs/admin-authoring.md](docs/admin-authoring.md): exam authoring, import formats, templates, and question-bank workflow
 - [docs/privacy-model.md](docs/privacy-model.md): identity separation, log redaction, and privacy boundaries
 - [docs/wallet-recovery-design.md](docs/wallet-recovery-design.md): recovery package model, lifecycle, and operator approval design
+- [docs/noir-grading.md](docs/noir-grading.md): Noir circuit, Barretenberg CLI backend, and proof semantics
 - [docs/demo-operator-quickstart.md](docs/demo-operator-quickstart.md): shortest path to a live local demo
 - [docs/demo-walkthrough.md](docs/demo-walkthrough.md): role-by-role live demo script

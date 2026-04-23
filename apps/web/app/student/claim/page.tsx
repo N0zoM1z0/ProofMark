@@ -12,6 +12,7 @@ import {
 import {
   getReceiptStorageKey,
   readStoredValue,
+  storeIdentityRecord,
   unlockStoredIdentity
 } from '../_lib/wallet';
 
@@ -67,6 +68,28 @@ type ClaimResult = {
   };
 };
 
+type RecoveryPackageSummary = {
+  escrowedAt: string;
+  expiresAt: string | null;
+  identityCommitment: string;
+  packageHash: string;
+  packageId: string;
+  restoredAt: string | null;
+  status: string;
+};
+
+type RecoveryRequestSummary = {
+  completedAt: string | null;
+  identityCommitment: string;
+  packageId: string;
+  packageStatus: string;
+  reason: string | null;
+  requestId: string;
+  requestedAt: string;
+  reviewedAt: string | null;
+  status: string;
+};
+
 async function generateClaimProof(params: {
   identityExport: string;
   memberCommitments: string[];
@@ -105,8 +128,63 @@ export default function StudentClaimPage() {
     null
   );
   const [claimResult, setClaimResult] = useState<ClaimResult | null>(null);
+  const [recoveryPackage, setRecoveryPackage] =
+    useState<RecoveryPackageSummary | null>(null);
+  const [recoveryRequests, setRecoveryRequests] = useState<RecoveryRequestSummary[]>(
+    []
+  );
+  const [recoveryReason, setRecoveryReason] = useState('');
   const [loadingContext, setLoadingContext] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [restoringWallet, setRestoringWallet] = useState(false);
+  const [requestingRecovery, setRequestingRecovery] = useState(false);
+
+  async function fetchRecoveryState(currentExamId: string, quiet = false) {
+    try {
+      const [packageResponse, requestsResponse] = await Promise.all([
+        fetch(`${apiBaseUrl}/api/student/exams/${currentExamId}/recovery-package`, {
+          headers: {
+            'x-student-id': studentId.trim()
+          },
+          method: 'GET'
+        }),
+        fetch(`${apiBaseUrl}/api/student/exams/${currentExamId}/recovery-requests`, {
+          headers: {
+            'x-student-id': studentId.trim()
+          },
+          method: 'GET'
+        })
+      ]);
+
+      if (!packageResponse.ok || !requestsResponse.ok) {
+        throw new Error('Failed to load wallet recovery status');
+      }
+
+      const packagePayload = (await packageResponse.json()) as {
+        recoveryPackage: RecoveryPackageSummary | null;
+      };
+      const requestsPayload = (await requestsResponse.json()) as {
+        recoveryRequests: RecoveryRequestSummary[];
+      };
+
+      setRecoveryPackage(packagePayload.recoveryPackage);
+      setRecoveryRequests(requestsPayload.recoveryRequests);
+      return {
+        recoveryPackage: packagePayload.recoveryPackage,
+        recoveryRequests: requestsPayload.recoveryRequests
+      };
+    } catch (error) {
+      if (!quiet) {
+        setStatus(
+          error instanceof Error
+            ? error.message
+            : 'Failed to load recovery state'
+        );
+      }
+
+      return null;
+    }
+  }
 
   async function refreshFinalizedGrade(
     currentExam: PublicExamResponse,
@@ -165,6 +243,7 @@ export default function StudentClaimPage() {
 
       setExam(nextExam);
       setGroup(nextGroup);
+      void fetchRecoveryState(nextExam.id, true);
 
       if (storedReceipt) {
         await applyReceipt(storedReceipt, nextExam);
@@ -290,6 +369,108 @@ export default function StudentClaimPage() {
     }
   }
 
+  async function handleRequestRecovery() {
+    if (!exam) {
+      setStatus('Load claim context before opening a recovery request.');
+      return;
+    }
+
+    setRequestingRecovery(true);
+    setStatus('Submitting a wallet recovery request for operator approval.');
+
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/api/student/exams/${exam.id}/recovery-requests`,
+        {
+          body: JSON.stringify({
+            reason: recoveryReason.trim() || null
+          }),
+          headers: {
+            'content-type': 'application/json',
+            'x-student-id': studentId.trim()
+          },
+          method: 'POST'
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      await fetchRecoveryState(exam.id, true);
+      setStatus(
+        'Recovery request submitted. Wait for an operator to approve it, then restore the encrypted wallet back into this browser.'
+      );
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : 'Failed to request recovery'
+      );
+    } finally {
+      setRequestingRecovery(false);
+    }
+  }
+
+  async function handleRestoreApprovedWallet() {
+    if (!exam) {
+      setStatus('Load claim context before restoring a wallet.');
+      return;
+    }
+
+    const approvedRequest = recoveryRequests.find(
+      (request) => request.status === 'APPROVED'
+    );
+
+    if (!approvedRequest) {
+      setStatus('No approved recovery request is available yet.');
+      return;
+    }
+
+    setRestoringWallet(true);
+    setStatus('Restoring the approved encrypted wallet package back into IndexedDB.');
+
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/api/student/exams/${exam.id}/recovery-requests/${approvedRequest.requestId}/restore`,
+        {
+          headers: {
+            'x-student-id': studentId.trim()
+          },
+          method: 'POST'
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const payload = (await response.json()) as {
+        encryptedRecord: {
+          ciphertext: string;
+          commitment: string;
+          iv: string;
+          salt: string;
+          version: 1;
+        };
+      };
+
+      await storeIdentityRecord({
+        encryptedRecord: payload.encryptedRecord,
+        examId: exam.id
+      });
+      setCommitment(payload.encryptedRecord.commitment);
+      await fetchRecoveryState(exam.id, true);
+      setStatus(
+        'Encrypted wallet restored into local storage. Unlock it with the original passphrase, then finish the grade claim.'
+      );
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : 'Failed to restore wallet'
+      );
+    } finally {
+      setRestoringWallet(false);
+    }
+  }
+
   return (
     <main className="shell">
       <section className="hero">
@@ -300,9 +481,9 @@ export default function StudentClaimPage() {
           that the same anonymous submitter is now claiming the published result.
         </p>
         <p className="helper-copy">
-          If the browser-local wallet is gone, the current release requires an
-          exported encrypted backup. Claim recovery without a backup is not yet
-          supported.
+          If the browser-local wallet is gone, use the escrowed recovery package
+          flow below. Recovery still requires the original passphrase because the
+          server never stores the plaintext identity.
         </p>
       </section>
 
@@ -337,6 +518,14 @@ export default function StudentClaimPage() {
               }}
             />
           </label>
+          <label className="field">
+            <span>Recovery Reason</span>
+            <input
+              value={recoveryReason}
+              onChange={(event) => setRecoveryReason(event.target.value)}
+              placeholder="Optional note for the operator review"
+            />
+          </label>
         </div>
 
         <div className="actions">
@@ -366,6 +555,36 @@ export default function StudentClaimPage() {
           >
             {claiming ? 'Claiming…' : 'Claim Finalized Grade'}
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              void handleRequestRecovery();
+            }}
+            disabled={requestingRecovery}
+          >
+            {requestingRecovery ? 'Requesting…' : 'Request Wallet Recovery'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void handleRestoreApprovedWallet();
+            }}
+            disabled={restoringWallet}
+          >
+            {restoringWallet ? 'Restoring…' : 'Restore Approved Wallet'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (exam) {
+                void fetchRecoveryState(exam.id);
+              } else {
+                setStatus('Load claim context before refreshing recovery state.');
+              }
+            }}
+          >
+            Refresh Recovery Status
+          </button>
         </div>
 
         <p className="status-copy">{status}</p>
@@ -391,6 +610,57 @@ export default function StudentClaimPage() {
             <p>{receipt ? receipt.submissionId : 'No receipt loaded yet'}</p>
           </div>
         </div>
+      </section>
+
+      <section className="card">
+        <h2>Wallet Recovery</h2>
+        <div className="meta-grid">
+          <div>
+            <span className="meta-label">Escrow Package</span>
+            <p>{recoveryPackage?.packageId ?? 'No package detected'}</p>
+          </div>
+          <div>
+            <span className="meta-label">Package Status</span>
+            <p>{recoveryPackage?.status ?? 'Unavailable'}</p>
+          </div>
+          <div>
+            <span className="meta-label">Escrowed At</span>
+            <p>{recoveryPackage?.escrowedAt ?? 'Unavailable'}</p>
+          </div>
+          <div>
+            <span className="meta-label">Latest Request</span>
+            <p>{recoveryRequests[0]?.status ?? 'No requests yet'}</p>
+          </div>
+        </div>
+        {recoveryRequests.length ? (
+          <div className="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>Request</th>
+                  <th>Status</th>
+                  <th>Requested</th>
+                  <th>Reviewed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recoveryRequests.map((request) => (
+                  <tr key={request.requestId}>
+                    <td>{request.requestId}</td>
+                    <td>{request.status}</td>
+                    <td>{request.requestedAt}</td>
+                    <td>{request.reviewedAt ?? 'Pending'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="helper-copy">
+            No recovery requests yet. If the wallet is missing from this browser,
+            open a request and wait for operator approval.
+          </p>
+        )}
       </section>
 
       {receipt && receiptVerification ? (

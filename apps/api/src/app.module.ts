@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AdminRecoveryController } from './admin-recovery.controller.js';
 import { AdminAuthoringController } from './admin-authoring.controller.js';
 import { AdminAuthoringService } from './admin-authoring.service.js';
 import { AdminAuthService } from './admin-auth.service.js';
@@ -20,16 +21,20 @@ import { SubmissionService } from './submission.service.js';
 import { SubmissionUploadService } from './submission-upload.service.js';
 import { StudentClaimController } from './student-claim.controller.js';
 import { StudentClaimService } from './student-claim.service.js';
+import { StudentRecoveryController } from './student-recovery.controller.js';
 import { StudentRegistrationController } from './student-registration.controller.js';
 import { StudentRegistrationService } from './student-registration.service.js';
+import { WalletRecoveryService } from './wallet-recovery.service.js';
 
 @Module({
   controllers: [
     AppController,
     AdminAuthoringController,
     AdminExamController,
+    AdminRecoveryController,
     StudentRegistrationController,
     StudentClaimController,
+    StudentRecoveryController,
     PublicExamController,
     PublicUploadController,
     PublicVerifyController,
@@ -47,6 +52,7 @@ import { StudentRegistrationService } from './student-registration.service.js';
     PublicVerifyService,
     StudentClaimService,
     StudentRegistrationService,
+    WalletRecoveryService,
     PublicExamService,
     SubmissionService,
     SubmissionUploadService

@@ -10,14 +10,11 @@ import { verifyProof } from '@semaphore-protocol/proof';
 import { PrismaService } from './prisma.service.js';
 import type { SemaphoreProof } from './submission.service.js';
 import { canonicalJson, computeSubmitScope, sha256Hex } from './submission-utils.js';
+import { canonicalStudentHash } from './student-identity-utils.js';
 
 const semaphoreVerifyProof = verifyProof as (
   proof: SemaphoreProof
 ) => Promise<boolean>;
-
-function canonicalStudentHash(studentId: string) {
-  return sha256Hex(studentId);
-}
 
 @Injectable()
 export class StudentClaimService {

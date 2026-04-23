@@ -80,6 +80,14 @@ function classifyRateLimitBucket(path: string): RateLimitBucket | null {
     return 'studentRegister';
   }
 
+  if (/^\/api\/student\/exams\/[^/]+\/recovery-package$/.test(path)) {
+    return 'studentRegister';
+  }
+
+  if (/^\/api\/student\/exams\/[^/]+\/recovery-requests(?:\/[^/]+\/restore)?$/.test(path)) {
+    return 'studentClaim';
+  }
+
   if (/^\/api\/student\/exams\/[^/]+\/claims$/.test(path)) {
     return 'studentClaim';
   }

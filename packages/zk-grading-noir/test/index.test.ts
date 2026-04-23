@@ -2,6 +2,7 @@ import { createFixedMcqAnswerSheet } from '@proofmark/shared';
 import { sha256Canonical } from '@proofmark/crypto';
 import { describe, expect, it } from 'vitest';
 import {
+  ensureBarretenbergAvailable,
   generateObjectiveGradeProof,
   objectiveGradingCircuitVersion,
   objectiveGradingVerifierHash,
@@ -84,34 +85,41 @@ function createInputs() {
   };
 }
 
-describe('zk-grading-noir development backend', () => {
-  it('generates and verifies a deterministic grading proof', () => {
+describe('zk-grading-noir Barretenberg backend', () => {
+  it(
+    'generates and verifies a real Noir/Barretenberg grading proof',
+    async () => {
+      await expect(ensureBarretenbergAvailable()).resolves.toContain('.');
+      const inputs = createInputs();
+      const proof = await generateObjectiveGradeProof({
+        ...inputs
+      });
+      const verification = await verifyObjectiveGradeProof({
+        privateInputs: inputs.privateInputs,
+        proof
+      });
+
+      expect(proof.circuitVersion).toBe(objectiveGradingCircuitVersion);
+      expect(proof.verificationKeyHash).toMatch(/^sha256:[0-9a-f]+$/);
+      expect(objectiveGradingVerifierHash).toMatch(/^sha256:[0-9a-f]+$/);
+      expect(proof.backend).toBe('barretenberg-cli');
+      expect(proof.publicInputs.score).toBe(4);
+      expect(verification.verified).toBe(true);
+    },
+    120_000
+  );
+
+  it('rejects wrong score, wrong salt, and wrong answer key commitment', async () => {
     const inputs = createInputs();
-    const proof = generateObjectiveGradeProof({
-      ...inputs
-    });
-    const verification = verifyObjectiveGradeProof({
-      privateInputs: inputs.privateInputs,
-      proof
-    });
 
-    expect(proof.circuitVersion).toBe(objectiveGradingCircuitVersion);
-    expect(proof.verificationKeyHash).toBe(objectiveGradingVerifierHash);
-    expect(proof.publicInputs.score).toBe(4);
-    expect(verification.verified).toBe(true);
-  });
-
-  it('rejects wrong score, wrong salt, and wrong answer key commitment', () => {
-    const inputs = createInputs();
-
-    expect(() =>
+    await expect(
       generateObjectiveGradeProof({
         ...inputs,
         score: 2
       })
-    ).toThrow('SCORE_MISMATCH');
+    ).rejects.toThrow('SCORE_MISMATCH');
 
-    expect(() =>
+    await expect(
       generateObjectiveGradeProof({
         ...inputs,
         privateInputs: {
@@ -119,13 +127,13 @@ describe('zk-grading-noir development backend', () => {
           answerSheetSalt: 'wrong-salt'
         }
       })
-    ).toThrow('ANSWER_COMMITMENT_MISMATCH');
+    ).rejects.toThrow('ANSWER_COMMITMENT_MISMATCH');
 
-    expect(() =>
+    await expect(
       generateObjectiveGradeProof({
         ...inputs,
         answerKeyCommitment: 'sha256:deadbeef'
       })
-    ).toThrow('ANSWER_KEY_COMMITMENT_MISMATCH');
+    ).rejects.toThrow('ANSWER_KEY_COMMITMENT_MISMATCH');
   });
 });

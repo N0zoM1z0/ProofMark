@@ -161,6 +161,15 @@ importers:
 
   packages/zk-grading-noir:
     dependencies:
+      '@noir-lang/acvm_js':
+        specifier: 1.0.0-beta.20
+        version: 1.0.0-beta.20
+      '@noir-lang/noir_js':
+        specifier: 1.0.0-beta.20
+        version: 1.0.0-beta.20
+      '@noir-lang/noirc_abi':
+        specifier: 1.0.0-beta.20
+        version: 1.0.0-beta.20
       '@proofmark/crypto':
         specifier: workspace:*
         version: link:../crypto
@@ -896,6 +905,18 @@ packages:
   '@noble/hashes@1.3.2':
     resolution: {integrity: sha512-MVC8EAQp7MvEcm30KWENFjgR+Mkmf+D189XJTkFIlwohU5hcBbn1ZkKq7KVTi2Hme3PMGF390DaL52beVrIihQ==}
     engines: {node: '>= 16'}
+
+  '@noir-lang/acvm_js@1.0.0-beta.20':
+    resolution: {integrity: sha512-L+DXYcvG7cGgsr1+yR5OYP2fCncm5HUrSi3vqMzkpaxy/tlUuyzNnEECVZ6Q0Zg30QA/aWO7Uwc94dEG87ZHsQ==}
+
+  '@noir-lang/noir_js@1.0.0-beta.20':
+    resolution: {integrity: sha512-9al+SHliPEre2y4vT9IfZ7rYuvDZxduZLqPL+vQb7Yz18p5HRk6gq0Hm2GFo48ooOxkX+YFjKKDlGTqtPMWR2w==}
+
+  '@noir-lang/noirc_abi@1.0.0-beta.20':
+    resolution: {integrity: sha512-livQmsyq+ebO74rwO7iqvOIoPbv17neAkue+L86J18oBsuqyzCRfS8Vw8jN3cCe0MAXHacyz/+3rjh5BqTSY0Q==}
+
+  '@noir-lang/types@1.0.0-beta.20':
+    resolution: {integrity: sha512-uqje0gPxubHmcQ+NIoD2NXpah2DVaIAY9Mxt8j4S2cc2e88NnbuohrC8K9vPxlvwkghUOq9mBqU+m83Q871mVg==}
 
   '@nuxt/opencollective@0.4.1':
     resolution: {integrity: sha512-GXD3wy50qYbxCJ652bDrDzgMr3NFEkIS374+IgFQKkCvk9yiYcLvX2XDYr7UyQxf4wK0e+yqDYRubZ0DtOxnmQ==}
@@ -2566,6 +2587,9 @@ packages:
     resolution: {integrity: sha512-LaNjtRWUBY++zB5nE/NwcaoMylSPk+S+ZHNB1TzdbMJMny6dynpAGt7X/tl/QYq3TIeE6nxHppbo2LGymrG5Pw==}
     engines: {node: '>=10'}
 
+  pako@2.1.0:
+    resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
+
   parseurl@1.3.3:
     resolution: {integrity: sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ==}
     engines: {node: '>= 0.8'}
@@ -4070,6 +4094,21 @@ snapshots:
       '@noble/hashes': 1.3.2
 
   '@noble/hashes@1.3.2': {}
+
+  '@noir-lang/acvm_js@1.0.0-beta.20': {}
+
+  '@noir-lang/noir_js@1.0.0-beta.20':
+    dependencies:
+      '@noir-lang/acvm_js': 1.0.0-beta.20
+      '@noir-lang/noirc_abi': 1.0.0-beta.20
+      '@noir-lang/types': 1.0.0-beta.20
+      pako: 2.1.0
+
+  '@noir-lang/noirc_abi@1.0.0-beta.20':
+    dependencies:
+      '@noir-lang/types': 1.0.0-beta.20
+
+  '@noir-lang/types@1.0.0-beta.20': {}
 
   '@nuxt/opencollective@0.4.1':
     dependencies:
@@ -5959,6 +5998,8 @@ snapshots:
   p-locate@5.0.0:
     dependencies:
       p-limit: 3.1.0
+
+  pako@2.1.0: {}
 
   parseurl@1.3.3: {}
 

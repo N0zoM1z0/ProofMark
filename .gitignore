@@ -8,3 +8,5 @@ coverage
 playwright-report
 test-results
 audits/
+circuits/**/target/
+circuits/**/Prover.toml

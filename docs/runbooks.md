@@ -18,11 +18,12 @@
 - `MANIFEST_SIGNING_KEY` and `RECEIPT_SIGNING_KEY` should be long-lived Ed25519 keys if external verifiers need stable signatures across restarts.
 - `BLOB_ENCRYPTION_PRIVATE_KEY` must be stable anywhere decryption or grading is expected after process restart.
 - `LOG_REDACTION_SALT` should be unique per environment so hashed principals in logs cannot be correlated across deployments.
+- `BARRETENBERG_BINARY` or `BB_BINARY` may be set when the `bb` executable is not available at `$HOME/.bb/bb` or on `PATH`.
 
 ## Current Release Limitations
 
-- Objective proof artifacts still come from the development placeholder backend in `@proofmark/zk-grading-noir`. The surrounding pipeline is wired through the system, but the release does not yet run a production `Noir/Barretenberg` circuit.
-- Student claim still depends on the browser-local Semaphore identity. If a student loses local browser storage before claim and has no exported backup, the current release has no supported recovery path.
+- Objective proof artifacts now come from the `fixed_mcq_grading` Noir circuit and Barretenberg CLI. The supported circuit is intentionally narrow: fixed MCQ scoring over hashed choice inputs, with outer ProofMark commitments checked by the worker.
+- Student claim still depends on the browser-local Semaphore identity. Recovery works only when the student previously escrowed the encrypted recovery package and still knows the original wallet passphrase.
 
 These are release-significant limitations, not minor gaps.
 
@@ -51,18 +52,22 @@ Symptoms:
 - the exam has reached `CLAIMING`
 - the student still has a valid receipt
 - the browser-local Semaphore identity is gone
-- no exported encrypted backup exists
+- the student did not keep a usable local backup
 
 Current release status:
-- there is no supported recovery path yet
-- the operator should treat this as a blocked claim, not as a normal help-desk reset
+- operator-approved recovery is supported only when an encrypted recovery package was escrowed earlier from `/student/register`
+- restoring the wallet still requires the original passphrase, because the server never stores the plaintext identity
+- if no escrowed recovery package exists, the operator should treat this as a blocked claim, not as a normal help-desk reset
 
 Operator response:
-1. Confirm whether the student exported an encrypted wallet backup.
-2. If a backup exists, instruct the student to import it locally before using `/student/claim`.
-3. If no backup exists, do not promise recovery through the current release.
-4. Record the incident in the deployment log.
-5. If this failure mode is unacceptable for the cohort, pause further real-user rollout until the wallet recovery feature tracked in issue `#2` is delivered.
+1. Confirm whether the student can restore a local encrypted backup first.
+2. If a local backup exists, instruct the student to import it locally before using `/student/claim`.
+3. If not, inspect `/admin` or `GET /api/admin/exams/:examId/recovery-requests` to verify whether an escrowed recovery package exists for that student.
+4. Ask the student to open a recovery request from `/student/claim`.
+5. Review and approve or reject the request from `/admin`.
+6. If approved, instruct the student to restore the approved wallet package and unlock it with the original passphrase before claiming.
+7. If no escrowed recovery package exists, do not promise recovery through the current release.
+8. Record the incident in the deployment log.
 
 ## Recovery From Worker Failure
 
@@ -102,10 +107,10 @@ Recovery:
 
 Do not sign off a production-style rollout unless all of the following are true:
 
-- operators acknowledge that objective proof artifacts still use a development placeholder backend, or that limitation has been removed in the target release
+- operators acknowledge the supported scope of the fixed MCQ Noir grading circuit
 - student communications explicitly require encrypted wallet backup export before submission and before claim
-- support staff understand that wallet loss without backup is not currently recoverable
-- the environment owner accepts that public claims about live production ZK grading must wait until the real `Noir/Barretenberg` backend is integrated
+- support staff understand that wallet loss is recoverable only when the student escrowed a recovery package earlier and still remembers the wallet passphrase
+- the environment owner has installed compatible `nargo` and `bb` binaries and verified `@proofmark/zk-grading-noir` tests in the target environment
 - the release verification suite has passed in the target environment
 
 ## Verification Commands

@@ -4,8 +4,8 @@ This document is the canonical operational reference for running a full ProofMar
 
 ## Current Release Caveats
 
-- Objective grading proof artifacts currently use a development placeholder backend, not a production `Noir/Barretenberg` circuit.
-- Students must preserve the browser-local Semaphore identity until claim is complete. Without an exported encrypted backup, the current release does not yet support wallet recovery before `CLAIMING`.
+- Objective grading proof artifacts now use the fixed MCQ Noir circuit and Barretenberg CLI. The circuit proves score computation over hashed choice inputs; the worker checks the external ProofMark commitments.
+- Students must preserve the browser-local Semaphore identity until claim is complete. Recovery before `CLAIMING` now depends on an earlier escrowed recovery package plus the original wallet passphrase.
 
 ## 1. Purpose
 
@@ -60,14 +60,17 @@ Student is responsible for:
 - generating a local Semaphore identity
 - keeping the wallet passphrase safe
 - exporting the encrypted wallet backup before relying on later claim
+- escrow an encrypted recovery package after commitment registration
 - registering one identity commitment
 - anonymously submitting the encrypted answer sheet
 - saving the receipt
 - claiming the finalized grade after the exam reaches `CLAIMING`
+- requesting wallet recovery from `/student/claim` if the local wallet is lost
 
 Student can see:
 
 - their own local wallet backup
+- their own escrowed recovery request status
 - the public exam
 - their own local receipt
 - public finalized grade data for their submission

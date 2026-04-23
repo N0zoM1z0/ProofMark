@@ -27,7 +27,7 @@ test('browser wallet registration, anonymous submission, and receipt verificatio
 
   await page.goto('/student/register');
   await page.getByLabel('Exam ID').fill(exam.examId);
-  await page.getByLabel('Mock Student ID').fill(studentId);
+  await page.getByLabel('Student ID').fill(studentId);
   await page.getByLabel('Passphrase').fill(passphrase);
   await page.getByRole('button', { name: 'Create Identity' }).click();
   await expect(
@@ -39,6 +39,10 @@ test('browser wallet registration, anonymous submission, and receipt verificatio
   });
   await page.getByRole('button', { name: 'Register Commitment' }).click();
   await expect(page.getByText(/Commitment registered\./)).toBeVisible({
+    timeout: 30_000
+  });
+  await page.getByRole('button', { name: 'Escrow Recovery Package' }).click();
+  await expect(page.getByText(/Recovery package escrowed\./)).toBeVisible({
     timeout: 30_000
   });
 

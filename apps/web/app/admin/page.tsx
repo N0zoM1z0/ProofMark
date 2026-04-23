@@ -72,6 +72,19 @@ type ExportResponse = {
   json: string;
 };
 
+type RecoveryRequestSummary = {
+  completedAt: string | null;
+  identityCommitment: string;
+  packageId: string;
+  packageStatus: string;
+  reason: string | null;
+  requestId: string;
+  requestedAt: string;
+  requestedByCiphertext: string;
+  reviewedAt: string | null;
+  status: string;
+};
+
 const examActionDefinitions = [
   { endpoint: 'commit', label: 'Commit' },
   { endpoint: 'registration', label: 'Registration' },
@@ -215,6 +228,9 @@ export default function AdminPage() {
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [questionBank, setQuestionBank] = useState<QuestionBankEntry[]>([]);
   const [exams, setExams] = useState<AdminExamSummary[]>([]);
+  const [recoveryRequests, setRecoveryRequests] = useState<RecoveryRequestSummary[]>(
+    []
+  );
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
   const [templateTitle, setTemplateTitle] = useState('');
   const [templateDescription, setTemplateDescription] = useState('');
@@ -682,6 +698,64 @@ export default function AdminPage() {
     } catch (error) {
       setStatus(
         error instanceof Error ? error.message : 'Failed to save question'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadRecoveryRequests(examId = selectedExamId) {
+    if (!examId) {
+      setStatus('Select an exam before loading recovery requests.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const payload = await fetchAdminJson<{
+        recoveryRequests: RecoveryRequestSummary[];
+      }>(`/api/admin/exams/${examId}/recovery-requests`, {
+        method: 'GET'
+      });
+
+      setRecoveryRequests(payload.recoveryRequests);
+      setStatus(
+        `Loaded ${payload.recoveryRequests.length} recovery request(s) for exam ${examId}.`
+      );
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : 'Failed to load recovery requests'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function reviewRecoveryRequest(requestId: string, action: 'approve' | 'reject') {
+    if (!selectedExamId) {
+      setStatus('Select an exam before reviewing a recovery request.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await fetchAdminJson(
+        `/api/admin/exams/${selectedExamId}/recovery-requests/${requestId}/${action}`,
+        {
+          method: 'POST'
+        }
+      );
+      await loadRecoveryRequests(selectedExamId);
+      setStatus(`Recovery request ${requestId} ${action}d.`);
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : `Failed to ${action} recovery request`
       );
     } finally {
       setLoading(false);
@@ -1573,6 +1647,80 @@ subjective,s1,Explain why private receipts improve auditability.,,,,,,sha256:rub
           ) : (
             <p className="helper-copy">
               Load the workspace to see current exams.
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="card stack">
+        <div className="admin-toolbar">
+          <div>
+            <p className="eyebrow">Recovery</p>
+            <h2>Wallet recovery request review</h2>
+          </div>
+          {selectedExam ? (
+            <span className="pill neutral">{selectedExam.id}</span>
+          ) : (
+            <span className="pill neutral">Select an exam first</span>
+          )}
+        </div>
+        <div className="actions">
+          <button
+            type="button"
+            onClick={() => {
+              void loadRecoveryRequests();
+            }}
+            disabled={loading || !selectedExamId}
+          >
+            Load Recovery Requests
+          </button>
+        </div>
+        <div className="library-list">
+          {recoveryRequests.length ? (
+            recoveryRequests.map((request) => (
+              <article key={request.requestId} className="library-card">
+                <div className="inline-meta">
+                  <span className="pill">{request.status}</span>
+                  <span className="pill neutral">{request.packageStatus}</span>
+                </div>
+                <h3>{request.requestId}</h3>
+                <p>{request.reason ?? 'No student note provided.'}</p>
+                <div className="inline-meta">
+                  <span>{request.identityCommitment}</span>
+                  <span>{request.requestedByCiphertext}</span>
+                </div>
+                <div className="inline-meta">
+                  <span>{request.requestedAt}</span>
+                  <span>{request.reviewedAt ?? 'Pending review'}</span>
+                </div>
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => {
+                      void reviewRecoveryRequest(request.requestId, 'approve');
+                    }}
+                    disabled={loading || request.status !== 'REQUESTED'}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => {
+                      void reviewRecoveryRequest(request.requestId, 'reject');
+                    }}
+                    disabled={loading || request.status !== 'REQUESTED'}
+                  >
+                    Reject
+                  </button>
+                </div>
+              </article>
+            ))
+          ) : (
+            <p className="helper-copy">
+              Load recovery requests for the selected exam to review wallet
+              restores.
             </p>
           )}
         </div>

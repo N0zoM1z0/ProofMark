@@ -158,6 +158,13 @@ export async function createAndStoreIdentity(params: {
   };
 }
 
+export async function storeIdentityRecord(params: {
+  examId: string;
+  encryptedRecord: EncryptedIdentityRecord;
+}) {
+  await set(getIdentityStorageKey(params.examId), params.encryptedRecord);
+}
+
 export async function unlockStoredIdentity(params: {
   examId: string;
   passphrase: string;

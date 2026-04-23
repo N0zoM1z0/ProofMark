@@ -13,6 +13,7 @@ import {
   isRetryableAuditConflictError
 } from './audit-event-write.js';
 import { PrismaService } from './prisma.service.js';
+import { canonicalStudentHash } from './student-identity-utils.js';
 
 function canonicalJson(value: Record<string, unknown>) {
   return JSON.stringify(
@@ -72,10 +73,10 @@ export class StudentRegistrationService {
             create: {
               examId: params.examId,
               identityCommitment: params.identityCommitment,
-              realUserRefCiphertext: sha256Hex(params.studentId)
+              realUserRefCiphertext: canonicalStudentHash(params.studentId)
             },
             update: {
-              realUserRefCiphertext: sha256Hex(params.studentId)
+              realUserRefCiphertext: canonicalStudentHash(params.studentId)
             }
           });
 

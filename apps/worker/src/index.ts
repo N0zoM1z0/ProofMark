@@ -150,7 +150,7 @@ export class ObjectiveGradingWorker {
     );
     const serializedBlob = await readBodyAsString(object.Body);
     const decryptedBlob = decryptSubmissionBlobPayload(serializedBlob);
-    const proof = generateObjectiveGradeProof({
+    const proof = await generateObjectiveGradeProof({
       answerCommitment: submission.answerCommitment,
       answerKeyCommitment: submission.exam.answerKeyCommitment!,
       gradingPolicyHash: submission.exam.gradingPolicyHash!,
@@ -162,7 +162,7 @@ export class ObjectiveGradingWorker {
         gradingPolicy: latestVersion.gradingPolicyData as FixedMcqGradingPolicy
       }
     });
-    const verification = verifyObjectiveGradeProof({
+    const verification = await verifyObjectiveGradeProof({
       privateInputs: {
         answerKey: latestVersion.answerKeyData as FixedMcqAnswerKey,
         answerKeySalt: latestVersion.answerKeySalt,

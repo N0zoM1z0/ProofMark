@@ -1,0 +1,4 @@
+[package]
+name = "fixed_mcq_grading"
+type = "bin"
+authors = ["ProofMark"]
