@@ -19,6 +19,13 @@
 - `BLOB_ENCRYPTION_PRIVATE_KEY` must be stable anywhere decryption or grading is expected after process restart.
 - `LOG_REDACTION_SALT` should be unique per environment so hashed principals in logs cannot be correlated across deployments.
 
+## Current Release Limitations
+
+- Objective proof artifacts still come from the development placeholder backend in `@proofmark/zk-grading-noir`. The surrounding pipeline is wired through the system, but the release does not yet run a production `Noir/Barretenberg` circuit.
+- Student claim still depends on the browser-local Semaphore identity. If a student loses local browser storage before claim and has no exported backup, the current release has no supported recovery path.
+
+These are release-significant limitations, not minor gaps.
+
 ## Admin MFA
 
 The admin TOTP code is a 30-second six-digit code derived from `ADMIN_MFA_SECRET`.
@@ -37,6 +44,25 @@ Recovery:
 2. Verify the encrypted blob hash in object metadata matches the presigned request.
 3. Re-submit the same upload reference only if the prior request never created a submission row.
 4. If a submission row exists, do not resubmit. Retrieve the receipt from the API/database snapshot instead and re-verify it.
+
+## Recovery From Lost Student Wallet Before Claim
+
+Symptoms:
+- the exam has reached `CLAIMING`
+- the student still has a valid receipt
+- the browser-local Semaphore identity is gone
+- no exported encrypted backup exists
+
+Current release status:
+- there is no supported recovery path yet
+- the operator should treat this as a blocked claim, not as a normal help-desk reset
+
+Operator response:
+1. Confirm whether the student exported an encrypted wallet backup.
+2. If a backup exists, instruct the student to import it locally before using `/student/claim`.
+3. If no backup exists, do not promise recovery through the current release.
+4. Record the incident in the deployment log.
+5. If this failure mode is unacceptable for the cohort, pause further real-user rollout until the wallet recovery feature tracked in issue `#2` is delivered.
 
 ## Recovery From Worker Failure
 
@@ -71,6 +97,16 @@ Recovery:
 - Rotating `RECEIPT_SIGNING_KEY` invalidates future signatures but does not change stored receipt hashes.
 - Rotating `MANIFEST_SIGNING_KEY` changes future manifest signatures only.
 - Rotating `BLOB_ENCRYPTION_PRIVATE_KEY` without re-encrypting stored blobs will break grading and audit replay. Treat it as migration work, not a runtime toggle.
+
+## Production Go/No-Go Checklist
+
+Do not sign off a production-style rollout unless all of the following are true:
+
+- operators acknowledge that objective proof artifacts still use a development placeholder backend, or that limitation has been removed in the target release
+- student communications explicitly require encrypted wallet backup export before submission and before claim
+- support staff understand that wallet loss without backup is not currently recoverable
+- the environment owner accepts that public claims about live production ZK grading must wait until the real `Noir/Barretenberg` backend is integrated
+- the release verification suite has passed in the target environment
 
 ## Verification Commands
 

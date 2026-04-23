@@ -299,6 +299,11 @@ export default function StudentClaimPage() {
           This page reuses the local Semaphore identity and the stored receipt to prove
           that the same anonymous submitter is now claiming the published result.
         </p>
+        <p className="helper-copy">
+          If the browser-local wallet is gone, the current release requires an
+          exported encrypted backup. Claim recovery without a backup is not yet
+          supported.
+        </p>
       </section>
 
       <section className="card form-card">
@@ -364,6 +369,10 @@ export default function StudentClaimPage() {
         </div>
 
         <p className="status-copy">{status}</p>
+        <p className="helper-copy">
+          Keep both artifacts until claim is complete: the encrypted wallet backup
+          and the submission receipt.
+        </p>
         <div className="meta-grid">
           <div>
             <span className="meta-label">Commitment</span>

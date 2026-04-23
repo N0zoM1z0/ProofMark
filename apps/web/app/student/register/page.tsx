@@ -252,6 +252,11 @@ export default function StudentRegisterPage() {
           private key with Web Crypto, store it in IndexedDB, and send only the
           public commitment to the API.
         </p>
+        <p className="helper-copy">
+          Export the encrypted wallet backup before relying on later claim. In the
+          current release, losing browser storage before `CLAIMING` without a backup
+          means the result may not be recoverable.
+        </p>
       </section>
 
       <section className="card form-card">
@@ -295,6 +300,10 @@ export default function StudentRegisterPage() {
         <p>
           Commitment:
           <strong>{commitment ? ` ${commitment}` : ' not created yet'}</strong>
+        </p>
+        <p className="helper-copy">
+          Recommended order: create identity, export backup, then register the
+          commitment.
         </p>
         <p>{status}</p>
       </section>

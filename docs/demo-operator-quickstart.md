@@ -29,6 +29,11 @@ pnpm seed:demo
 
 The script returns an `examId`. The seeded exam is intentionally left in `REGISTRATION`.
 
+Before using the demo with real students, note two current release limitations:
+
+- objective proof artifacts still use the development placeholder backend rather than a production `Noir/Barretenberg` circuit
+- claim still depends on the browser-local student wallet, so students should export encrypted backups before they rely on later claim
+
 ## 3. Refresh the admin MFA code
 
 ```bash

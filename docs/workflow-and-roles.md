@@ -2,6 +2,11 @@
 
 This document is the canonical operational reference for running a full ProofMark exam lifecycle.
 
+## Current Release Caveats
+
+- Objective grading proof artifacts currently use a development placeholder backend, not a production `Noir/Barretenberg` circuit.
+- Students must preserve the browser-local Semaphore identity until claim is complete. Without an exported encrypted backup, the current release does not yet support wallet recovery before `CLAIMING`.
+
 ## 1. Purpose
 
 ProofMark separates:
@@ -54,6 +59,7 @@ Student is responsible for:
 
 - generating a local Semaphore identity
 - keeping the wallet passphrase safe
+- exporting the encrypted wallet backup before relying on later claim
 - registering one identity commitment
 - anonymously submitting the encrypted answer sheet
 - saving the receipt
@@ -222,6 +228,7 @@ Result:
 - registrar linkage is stored separately
 - only the commitment enters the eligibility group
 - the identity secret never leaves the browser
+- backup export is operationally required if the student must still be able to claim after browser loss
 
 ## Step C. Publish and open
 
@@ -345,6 +352,10 @@ Student opens `/student/claim` and:
 5. restores the stored receipt or uploads receipt JSON
 6. unlocks the local identity
 7. submits the claim
+
+Operational warning:
+
+- if the student has lost the local identity and does not have an exported encrypted backup, the current release does not provide a supported recovery path
 
 The system verifies:
 

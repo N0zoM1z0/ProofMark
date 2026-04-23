@@ -10,6 +10,12 @@ It combines:
 - blind marking workflows for subjective questions
 - late-stage grade claim so identity is reconnected only when results are finalized
 
+## Known Limitations
+
+- Objective proof artifacts currently run through a development placeholder backend in [`@proofmark/zk-grading-noir`](packages/zk-grading-noir/src/index.ts). The worker, proof artifact persistence, and public verification flow are live, but the production `Noir/Barretenberg` grading circuit is not yet integrated.
+- Student claim still depends on the same browser-local Semaphore identity used during submission. If a student loses browser storage before `CLAIMING` and has no exported encrypted wallet backup, recovery is not yet supported in the current release.
+- Because of the two points above, ProofMark should currently be described as providing verifiable workflow integrity, signed receipts, and blind marking support, but not yet production objective ZK grading proofs or production-grade claim recovery.
+
 ## What ProofMark Supports
 
 - Teacher-facing exam authoring in `/admin`
@@ -103,6 +109,8 @@ pnpm test:smoke
 pnpm test:load
 pnpm test:playwright
 ```
+
+Before a production-style rollout, read the go/no-go guidance in [docs/runbooks.md](docs/runbooks.md).
 
 ## User-Facing Routes
 
